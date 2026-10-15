@@ -16,12 +16,18 @@ pub struct InstallParams {
     pub comment: String,
 }
 
-/// Builds the script that appends the key to `~/.ssh/authorized_keys`.
+/// The note stored next to a key on the server: `myssh-` and its name.
+pub fn install_comment(label: &str) -> String {
+    format!("myssh-{label}")
+}
+
+/// Builds the script that appends the key to `~/.ssh/authorized_keys`. The
+/// app shows it before installing, word for word what each server runs.
 ///
 /// It only ever appends. Existing lines, including their options such as
 /// `from=` or `command=`, are never rewritten, and a key that is already
 /// present in any form is left as it is.
-fn install_script(public_key: &str, comment: &str) -> Result<String> {
+pub fn install_script(public_key: &str, comment: &str) -> Result<String> {
     let mut parts = public_key.split_whitespace();
     let (Some(kind), Some(blob), None) = (parts.next(), parts.next(), parts.next()) else {
         return Err(Error::Invalid("the public key is malformed".into()));

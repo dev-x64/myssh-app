@@ -86,6 +86,7 @@ pub fn run() {
             commands::key_rename,
             commands::key_delete,
             commands::key_install,
+            commands::key_install_script,
             commands::host_assign_key,
             commands::history_record,
             commands::history_suggest,

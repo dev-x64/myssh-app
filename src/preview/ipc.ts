@@ -254,6 +254,28 @@ export function createHandler(scenario: Scenario) {
       key.sync = Boolean(sync);
       return key;
     },
+    // The script as the app builds it (crates/core/src/ssh/install.rs), for a made-up key.
+    key_install_script: () =>
+      [
+        "umask 077",
+        'dir="${HOME:?}/.ssh"',
+        'file="$dir/authorized_keys"',
+        'if [ ! -d "$dir" ]; then',
+        '  mkdir -p "$dir" && chmod 700 "$dir" || { echo "cannot create $dir" >&2; exit 2; }',
+        "fi",
+        "if [ -f \"$file\" ] && awk -v key='AAAAC3NzaC1lZDI1NTE5AAAAIPreviewKey' '",
+        "  /^[[:space:]]*#/ { next }",
+        "  { for (i = 1; i <= NF; i++) if ($i == key) found = 1 }",
+        "  END { exit !found }' \"$file\"; then",
+        "  echo MYSSH_KEY_PRESENT",
+        "  exit 0",
+        "fi",
+        'if [ -s "$file" ] && [ "$(tail -c 1 "$file" | wc -l)" -eq 0 ]; then',
+        "  printf '\\n' >> \"$file\" || { echo \"cannot write $file\" >&2; exit 3; }",
+        "fi",
+        "printf '%s\\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPreviewKey myssh-laptop' >> \"$file\" || { echo \"cannot write $file\" >&2; exit 3; }",
+        "echo MYSSH_KEY_ADDED",
+      ].join("\n"),
     key_install: ({ events }) => {
       const channel = events as Channel<SessionEvent>;
       void later(600).then(() => {

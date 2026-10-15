@@ -483,6 +483,7 @@ export const api = {
   keyRename: (id: Id, label: string) => invoke<KeyView>("key_rename", { id, label }),
   keyDelete: (id: Id) => invoke<void>("key_delete", { id }),
   /** Starts installing a key on a host; progress arrives as session events. */
+  keyInstallScript: (keyId: Id) => invoke<string>("key_install_script", { keyId }),
   keyInstall: (keyId: Id, hostId: Id, events: Channel<SessionEvent>) =>
     invoke<number>("key_install", { keyId, hostId, events }),
   hostAssignKey: (hostId: Id, keyId: Id) => invoke<boolean>("host_assign_key", { hostId, keyId }),

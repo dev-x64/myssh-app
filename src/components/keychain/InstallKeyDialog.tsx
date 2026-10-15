@@ -1,5 +1,5 @@
 import { Channel } from "@tauri-apps/api/core";
-import { AlertTriangle, Check, CircleDashed, Search, ServerCog } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, CircleDashed, Search, ServerCog } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
@@ -45,8 +45,14 @@ export function InstallKeyDialog(props: { keyView: KeyView; onClose: () => void 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [running, setRunning] = useState(false);
   const [prompt, setPrompt] = useState<{ session: number; id: number; prompt: Prompt } | null>(null);
+  const [script, setScript] = useState<string | null>(null);
   const stopped = useRef(false);
   const current = useRef<number | null>(null);
+
+  // The script each server will run, shown word for word under Details.
+  useEffect(() => {
+    void api.keyInstallScript(key.id).then(setScript, () => setScript(null));
+  }, [key.id]);
 
   // Closing the dialog abandons whatever is still in flight.
   useEffect(
@@ -316,6 +322,16 @@ export function InstallKeyDialog(props: { keyView: KeyView; onClose: () => void 
                     </span>
                   </span>
                 </label>
+                {script && (
+                  <details className="install-details">
+                    <summary>
+                      <ChevronRight size={14} />
+                      {t("install.details")}
+                    </summary>
+                    <p>{t("install.details.text")}</p>
+                    <pre className="selectable scroll">{script.trimEnd()}</pre>
+                  </details>
+                )}
               </>
             )}
           </>

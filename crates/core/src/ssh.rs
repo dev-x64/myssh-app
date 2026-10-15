@@ -27,7 +27,7 @@ use crate::{Error, Result};
 
 mod archive;
 mod install;
-pub use install::{spawn_install, InstallParams};
+pub use install::{install_comment, install_script, spawn_install, InstallParams};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const SHELL_TIMEOUT: Duration = Duration::from_secs(20);

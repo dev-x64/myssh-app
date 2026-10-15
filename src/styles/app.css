@@ -5422,6 +5422,63 @@ html[data-theme="light"] .welcome-glow i:last-child {
   font-weight: 500;
 }
 
+/* What installing a key runs on a server, folded away until asked for. */
+.install-details summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.install-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.install-details summary:hover {
+  color: var(--text);
+}
+
+.install-details summary svg {
+  transition: transform 0.15s ease;
+}
+
+.install-details[open] summary svg {
+  transform: rotate(90deg);
+}
+
+.install-details p {
+  margin: 8px 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.install-details pre {
+  max-height: 220px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-1);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+  /* The script as it is: "<=" stays two characters. */
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+.install-details pre::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* --------------------------------------------------------- host load --- */
 
 /* Advanced mode at the foot of a host's tile: a hairline, then three even

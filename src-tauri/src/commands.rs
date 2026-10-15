@@ -405,6 +405,13 @@ fn note_host_os(app: AppHandle, session_id: u64, host_id: Id) {
 /// Reports through the same events as a terminal session and can be
 /// answered and cancelled the same way. It does not change the host: once
 /// `key_verified` arrives the UI may call [`host_assign_key`].
+/// The script installing a key runs on each server, to be shown before it does.
+#[tauri::command]
+pub fn key_install_script(state: State<'_, AppState>, key_id: Id) -> Result<String> {
+    let key = state.with_vault(|v| v.key(key_id))?;
+    ssh::install_script(&key.public_key, &ssh::install_comment(&key.label))
+}
+
 #[tauri::command]
 pub async fn key_install(
     app: AppHandle,
@@ -434,7 +441,7 @@ pub async fn key_install(
             rows: 24,
         },
         public_key: key.public_key.clone(),
-        comment: format!("myssh-{}", key.label),
+        comment: ssh::install_comment(&key.label),
         key: KeyParams {
             id: key.id,
             label: key.label,
