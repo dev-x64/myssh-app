@@ -187,7 +187,6 @@ function SuggestList({ tab }: { tab: Tab }) {
     container: "suggest.container",
     subcommand: "suggest.subcommand",
     ai: "suggest.ai",
-    ask: "suggest.ai",
   } as const;
   const firstFix = state.items.findIndex((item) => item.kind === "fix");
 
@@ -204,7 +203,8 @@ function SuggestList({ tab }: { tab: Tab }) {
                 role="option"
                 aria-selected={index === state.index}
                 className={cx("suggest-item", item.kind, item.danger && "danger", index === state.index && "active")}
-                title={t(item.danger ? "suggest.ai_danger" : label[item.kind])}
+                // The row asking the AI says what it does itself; a tooltip over it only covers the hint.
+                title={item.kind === "ask" ? undefined : t(item.danger ? "suggest.ai_danger" : label[item.kind])}
                 // Keep the terminal focused: act on press, not on click.
                 onMouseDown={(e) => {
                   e.preventDefault();
