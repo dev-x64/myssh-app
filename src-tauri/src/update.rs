@@ -219,7 +219,47 @@ pub fn update_restart(app: AppHandle, state: State<'_, AppState>) -> Result<()> 
     if let Some((update, bytes)) = WAITING.lock().unwrap().take() {
         update.restart_after_install(true).install(bytes).map_err(failed)?;
     }
+    #[cfg(target_os = "macos")]
+    if relaunch_when_gone() {
+        app.exit(0);
+        return Ok(());
+    }
     app.restart();
+}
+
+/// On a Mac: has the app opened again once this copy has quit, the way the
+/// Finder opens it. Tauri's own restart opens a second copy while this one
+/// is still running, and the Dock then shows the app twice: the copy kept
+/// in the Dock, and the new one beside it. `false` when not run from an
+/// app bundle (a development build), or when the helper did not start.
+#[cfg(target_os = "macos")]
+fn relaunch_when_gone() -> bool {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    let Ok(binary) = std::env::current_exe() else {
+        return false;
+    };
+    let Some(bundle) = binary.ancestors().nth(3).filter(|b| b.extension().is_some_and(|e| e == "app")) else {
+        return false;
+    };
+    // Waits for this process to end (at most 30 s), then opens the bundle,
+    // which is passed as $0 so that no path needs quoting.
+    let script = format!(
+        "i=0; while /bin/kill -0 {} 2>/dev/null && [ $i -lt 300 ]; do /bin/sleep 0.1; i=$((i+1)); done; exec /usr/bin/open \"$0\"",
+        std::process::id()
+    );
+    Command::new("/bin/sh")
+        .arg("-c")
+        .arg(script)
+        .arg(bundle)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        // Its own process group: nothing sent to the app's reaches it.
+        .process_group(0)
+        .spawn()
+        .is_ok()
 }
 
 /// The app is closing. On Windows, an update waiting for that is installed
