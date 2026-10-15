@@ -164,13 +164,33 @@ function SuggestList({ tab }: { tab: Tab }) {
       Math.min(area.left - origin.left + state.col * cellWidth, origin.width - list.offsetWidth - 6),
     );
     const below = area.top - origin.top + (state.row + 1) * cellHeight + 2;
-    // Above the line when there is no room below it.
-    const top =
-      below + list.offsetHeight > origin.height - 4
-        ? area.top - origin.top + state.row * cellHeight - list.offsetHeight - 2
-        : below;
-    setPlace({ left, top: Math.max(4, top) });
+    // Above the line when there is no room below it, held by its foot there: a row
+    // opened in full grows away from the line, and stays under the pointer. The
+    // side is chosen by the list's closed height, so opening a row never flips it.
+    const height = list.offsetHeight - (list.querySelector<HTMLElement>(".suggest-full")?.offsetHeight ?? 0);
+    if (below + height > origin.height - 4) {
+      const above = area.top - origin.top + state.row * cellHeight - 2;
+      setPlace({ left, bottom: origin.height - above });
+    } else {
+      setPlace({ left, top: below });
+    }
   }, [session, state]);
+
+  // What did not fit on a row (a long command, its words cut short) is shown in
+  // full under it while it is chosen or pointed at.
+  const [hovered, setHovered] = useState(-1);
+  const [cut, setCut] = useState<ReadonlyMap<number, { command: boolean; detail: boolean }>>(new Map());
+  useLayoutEffect(() => {
+    const rows = ref.current?.querySelectorAll<HTMLElement>(".suggest-item");
+    const found = new Map<number, { command: boolean; detail: boolean }>();
+    const short = (part: HTMLElement | null) => !!part && part.scrollWidth > part.clientWidth + 1;
+    rows?.forEach((row, index) => {
+      const command = short(row.querySelector(".suggest-text")) || short(row.querySelector(".suggest-args"));
+      const detail = short(row.querySelector(".suggest-detail"));
+      if (command || detail) found.set(index, { command, detail });
+    });
+    setCut(found);
+  }, [state?.items]);
 
   // The list scrolls; the row chosen with the arrows stays in sight.
   useEffect(() => {
@@ -203,8 +223,16 @@ function SuggestList({ tab }: { tab: Tab }) {
                 role="option"
                 aria-selected={index === state.index}
                 className={cx("suggest-item", item.kind, item.danger && "danger", index === state.index && "active")}
-                // The row asking the AI says what it does itself; a tooltip over it only covers the hint.
-                title={item.kind === "ask" ? undefined : t(item.danger ? "suggest.ai_danger" : label[item.kind])}
+                // The AI's rows say what they are by their icon; a tooltip over them only covers the hint.
+                title={
+                  item.danger
+                    ? t("suggest.ai_danger")
+                    : item.kind === "ai" || item.kind === "ask"
+                      ? undefined
+                      : t(label[item.kind])
+                }
+                onMouseEnter={() => setHovered(index)}
+                onMouseLeave={() => setHovered((was) => (was === index ? -1 : was))}
                 // Keep the terminal focused: act on press, not on click.
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -218,6 +246,17 @@ function SuggestList({ tab }: { tab: Tab }) {
                 </span>
                 {item.args && <span className="suggest-args">{item.args}</span>}
                 {item.detail && <span className="suggest-detail">{item.detail}</span>}
+                {cut.has(index) && (index === state.index || index === hovered) && (
+                  <div className="suggest-full">
+                    {cut.get(index)?.command && (
+                      <code>
+                        {item.label}
+                        {item.args && ` ${item.args}`}
+                      </code>
+                    )}
+                    {item.detail && <span>{item.detail}</span>}
+                  </div>
+                )}
               </div>
             </Fragment>
           );
