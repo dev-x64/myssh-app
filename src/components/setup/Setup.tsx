@@ -1,8 +1,20 @@
-import { ArrowLeft, ChevronRight, Cloud, Users, WandSparkles } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Cloud,
+  Users,
+  WandSparkles,
+} from "lucide-react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useT, type Locale } from "../../lib/i18n";
 import { usePlan } from "../../lib/plan";
-import { ACCENTS, ACCENT_COLOR, FONT_SIZE, useSettings, type AppTheme } from "../../lib/settings";
+import {
+  ACCENTS,
+  ACCENT_COLOR,
+  FONT_SIZE,
+  useSettings,
+  type AppTheme,
+} from "../../lib/settings";
 import { useVault } from "../../lib/store";
 import { GetProButton, ProBadge } from "../cloud/Pro";
 import { SignInForm } from "../cloud/SignInForm";
@@ -10,6 +22,7 @@ import { Setting, Stepper } from "../settings/SettingsView";
 import { TerminalSample } from "../settings/TerminalSample";
 import { ThemeGrid } from "../settings/ThemeGrid";
 import { cx, Segmented, Switch } from "../ui";
+import { introWanted, WelcomeIntro } from "./WelcomeIntro";
 
 type Step = "look" | "account";
 
@@ -26,7 +39,10 @@ export function Setup() {
   const [index, setIndex] = useState(0);
   const step = steps[index];
   const last = index === steps.length - 1;
-  const finish = () => useSettings.getState().set({ setupDone: true, welcomed: true });
+  const finish = () =>
+    useSettings.getState().set({ setupDone: true, welcomed: true });
+  const [intro, setIntro] = useState(introWanted);
+  const introDone = useCallback(() => setIntro(false), []);
 
   return (
     <div className="welcome setup">
@@ -34,35 +50,48 @@ export function Setup() {
         <i />
         <i />
       </div>
-      <div className="welcome-body scroll">
-        <div className="setup-card" key={step}>
-          <div className="setup-steps" aria-hidden>
-            {steps.map((name, i) => (
-              <i key={name} className={cx(i === index && "on", i < index && "done")} />
-            ))}
-          </div>
-          {step === "look" && <LookStep />}
-          {step === "account" && <AccountStep />}
-          <div className="setup-nav">
-            {index > 0 ? (
-              <button className="btn ghost" onClick={() => setIndex(index - 1)}>
-                <ArrowLeft size={15} />
-                {t("setup.back")}
-              </button>
-            ) : (
-              <button className="btn ghost" onClick={finish}>
-                {t("setup.skip")}
-              </button>
-            )}
-            {!(step === "account") && (
-              <button className="btn primary" onClick={() => (last ? finish() : setIndex(index + 1))}>
-                {last ? t("setup.done") : t("setup.next")}
-                <ChevronRight size={15} />
-              </button>
-            )}
+      {intro ? (
+        <WelcomeIntro onDone={introDone} />
+      ) : (
+        <div className="welcome-body scroll">
+          <div className="setup-card" key={step}>
+            <div className="setup-steps" aria-hidden>
+              {steps.map((name, i) => (
+                <i
+                  key={name}
+                  className={cx(i === index && "on", i < index && "done")}
+                />
+              ))}
+            </div>
+            {step === "look" && <LookStep />}
+            {step === "account" && <AccountStep />}
+            <div className="setup-nav">
+              {index > 0 ? (
+                <button
+                  className="btn ghost"
+                  onClick={() => setIndex(index - 1)}
+                >
+                  <ArrowLeft size={15} />
+                  {t("setup.back")}
+                </button>
+              ) : (
+                <button className="btn ghost" onClick={finish}>
+                  {t("setup.skip")}
+                </button>
+              )}
+              {!(step === "account") && (
+                <button
+                  className="btn primary"
+                  onClick={() => (last ? finish() : setIndex(index + 1))}
+                >
+                  {last ? t("setup.done") : t("setup.next")}
+                  <ChevronRight size={15} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -108,7 +137,11 @@ function LookStep() {
             />
           </Setting>
           <Setting name={t("settings.accent")}>
-            <div className="swatches" role="radiogroup" aria-label={t("settings.accent")}>
+            <div
+              className="swatches"
+              role="radiogroup"
+              aria-label={t("settings.accent")}
+            >
               {ACCENTS.map((accent) => (
                 <button
                   key={accent}
@@ -132,11 +165,23 @@ function LookStep() {
               onChange={(fontSize) => s.set({ fontSize })}
             />
           </Setting>
-          <Setting name={t("settings.suggestions")} hint={t("setup.suggestions.hint")}>
-            <Switch on={s.suggestions} onChange={(suggestions) => s.set({ suggestions })} />
+          <Setting
+            name={t("settings.suggestions")}
+            hint={t("setup.suggestions.hint")}
+          >
+            <Switch
+              on={s.suggestions}
+              onChange={(suggestions) => s.set({ suggestions })}
+            />
           </Setting>
-          <Setting name={t("settings.server_stats")} hint={t("setup.server_stats.hint")}>
-            <Switch on={s.serverStats} onChange={(serverStats) => s.set({ serverStats })} />
+          <Setting
+            name={t("settings.server_stats")}
+            hint={t("setup.server_stats.hint")}
+          >
+            <Switch
+              on={s.serverStats}
+              onChange={(serverStats) => s.set({ serverStats })}
+            />
           </Setting>
         </div>
         <TerminalSample />
@@ -162,25 +207,43 @@ function AccountStep() {
   const t = useT();
   const account = useVault((s) => s.snapshot.cloud);
   const plan = usePlan((s) => s.plan?.plan);
-  const finish = () => useSettings.getState().set({ setupDone: true, welcomed: true });
+  const finish = () =>
+    useSettings.getState().set({ setupDone: true, welcomed: true });
   return (
     <>
-      <StepHead title={t("setup.account.title")} text={t("setup.account.text")} />
+      <StepHead
+        title={t("setup.account.title")}
+        text={t("setup.account.text")}
+      />
       <div className="setup-split account">
         <div className="setup-pro">
           <div className="setup-pro-title">
             {t("setup.pro.title")}
             <ProBadge />
           </div>
-          <ProFeature icon={<Cloud size={16} />} title={t("setup.pro.sync")} text={t("setup.pro.sync.text")} />
-          <ProFeature icon={<Users size={16} />} title={t("setup.pro.share")} text={t("setup.pro.share.text")} />
-          <ProFeature icon={<WandSparkles size={16} />} title={t("setup.pro.ai")} text={t("setup.pro.ai.text")} />
+          <ProFeature
+            icon={<Cloud size={16} />}
+            title={t("setup.pro.sync")}
+            text={t("setup.pro.sync.text")}
+          />
+          <ProFeature
+            icon={<Users size={16} />}
+            title={t("setup.pro.share")}
+            text={t("setup.pro.share.text")}
+          />
+          <ProFeature
+            icon={<WandSparkles size={16} />}
+            title={t("setup.pro.ai")}
+            text={t("setup.pro.ai.text")}
+          />
           <p className="setup-free">{t("setup.free")}</p>
         </div>
         <div className="setup-sign">
           {account ? (
             <div className="setup-signed">
-              <div className="name">{t("setup.signed_in", { email: account.email })}</div>
+              <div className="name">
+                {t("setup.signed_in", { email: account.email })}
+              </div>
               {plan === "free" && (
                 <>
                   <div className="hint">{t("setup.signed_in.free")}</div>
