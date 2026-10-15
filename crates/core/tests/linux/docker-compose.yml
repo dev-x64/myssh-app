@@ -1,0 +1,62 @@
+# Real Linux SSH servers for `cargo test -p myssh-core --test linux_servers`.
+#
+#   docker compose -f crates/core/tests/linux/docker-compose.yml up -d --build
+#   MYSSH_LINUX_TESTS=1 cargo test -p myssh-core --test linux_servers
+#   docker compose -f crates/core/tests/linux/docker-compose.yml down
+#
+# Every server has the user `tester` with the password `myssh-test` and is
+# published on loopback only. They exist for tests and hold nothing.
+name: myssh-test-servers
+
+x-debian-like: &debian-like |
+  ARG BASE
+  FROM $${BASE}
+  RUN apt-get update && apt-get install -y --no-install-recommends openssh-server procps \
+      && rm -rf /var/lib/apt/lists/* && mkdir -p /run/sshd \
+      && useradd -m -s /bin/bash tester && echo 'tester:myssh-test' | chpasswd
+  ARG SSHD_OPTIONS=""
+  ENV SSHD_OPTIONS=$${SSHD_OPTIONS}
+  CMD ["sh", "-c", "exec /usr/sbin/sshd -D -e $$SSHD_OPTIONS"]
+
+services:
+  ubuntu:
+    build:
+      dockerfile_inline: *debian-like
+      args: { BASE: "ubuntu:24.04" }
+    ports: ["127.0.0.1:2301:22"]
+
+  debian:
+    build:
+      dockerfile_inline: *debian-like
+      args: { BASE: "debian:12" }
+    ports: ["127.0.0.1:2302:22"]
+
+  # BusyBox userland: no procps, so the terminal's directory cannot be
+  # found by the usual means and the app must cope with not knowing it.
+  alpine:
+    build:
+      dockerfile_inline: |
+        FROM alpine:3.20
+        RUN apk add --no-cache openssh && ssh-keygen -A \
+            && adduser -D -s /bin/sh tester && echo 'tester:myssh-test' | chpasswd
+        CMD ["/usr/sbin/sshd", "-D", "-e"]
+    ports: ["127.0.0.1:2303:22"]
+
+  rocky:
+    build:
+      dockerfile_inline: |
+        FROM rockylinux:9
+        RUN dnf install -y openssh-server procps-ng passwd && dnf clean all && ssh-keygen -A \
+            && useradd -m tester && echo 'tester:myssh-test' | chpasswd && rm -f /run/nologin
+        CMD ["/usr/sbin/sshd", "-D", "-e"]
+    ports: ["127.0.0.1:2304:22"]
+
+  # Passwords only through keyboard-interactive (PAM), as many hardened
+  # servers are set up.
+  interactive:
+    build:
+      dockerfile_inline: *debian-like
+      args:
+        BASE: "ubuntu:24.04"
+        SSHD_OPTIONS: "-o PasswordAuthentication=no -o KbdInteractiveAuthentication=yes -o UsePAM=yes"
+    ports: ["127.0.0.1:2305:22"]

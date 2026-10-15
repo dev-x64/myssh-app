@@ -1,0 +1,11 @@
+node_modules/
+dist/
+target/
+src-tauri/gen/
+.DS_Store
+*.log
+release/
+src-tauri/dmg/background-preview.png
+
+# The words for the next release, passed to scripts/release.sh.
+notes.txt
