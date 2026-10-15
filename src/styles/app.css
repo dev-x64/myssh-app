@@ -5045,6 +5045,36 @@ html[data-theme="light"] .welcome-glow i:last-child {
   white-space: nowrap;
 }
 
+/* In Settings the schemes sit in a row of the table, a size smaller. */
+.setting.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.theme-grid.small {
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 7px;
+}
+
+.theme-grid.small .theme-card {
+  gap: 4px;
+  padding: 4px 4px 5px;
+  border-radius: 9px;
+}
+
+.theme-grid.small .theme-mini {
+  padding: 4px 5px;
+  border-radius: 5px;
+  font-size: 7.5px;
+}
+
+.theme-grid.small .theme-name {
+  padding: 0 2px;
+  font-size: 10.5px;
+}
+
 /* ------------------------------------------------------- local terminal --- */
 
 /* The local terminal's short start: the mark draws its prompt, the cursor

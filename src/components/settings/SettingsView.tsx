@@ -19,12 +19,13 @@ import { usePlan } from "../../lib/plan";
 import { useUi, useVault } from "../../lib/store";
 import { WINDOWS } from "../../lib/platform";
 import { useUpdate } from "../../lib/update";
-import { resolveTermTheme, TERM_THEMES } from "../../lib/themes";
+import { resolveTermTheme } from "../../lib/themes";
 import { cx, Segmented, Switch } from "../ui";
 import { DeleteAccount } from "./DeleteAccount";
 import { SecuritySection } from "./SecuritySection";
 import { SharingSection } from "./SharingSection";
 import { TerminalSample } from "./TerminalSample";
+import { ThemeGrid } from "./ThemeGrid";
 
 export function Setting(props: { name: string; hint?: string; children: ReactNode }) {
   return (
@@ -146,20 +147,12 @@ export function SettingsView() {
           {/* The sample stands beside what changes it, and stays in sight while that is scrolled through. */}
           <div className="with-preview">
             <div className="table">
-              <Setting name={t("settings.term_theme")}>
-                <select
-                  className="select"
-                  value={s.termTheme}
-                  onChange={(e) => s.set({ termTheme: e.target.value })}
-                >
-                  <option value="auto">{t("settings.term_theme.auto")}</option>
-                  {TERM_THEMES.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </Setting>
+              <div className="setting stacked">
+                <div className="setting-text">
+                  <div className="name">{t("settings.term_theme")}</div>
+                </div>
+                <ThemeGrid small />
+              </div>
               <Setting name={t("settings.font")}>
                 <select
                   className="select"
