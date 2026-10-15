@@ -107,6 +107,19 @@ export function knownCommands(input: string, limit: number): { entry: KnownComma
     .map((entry) => ({ entry, label: `${sudo}${entry.command}` }));
 }
 
+/**
+ * Whether the line is a command already rather than words saying what is
+ * wanted: a known program first, or flags, pipes, redirections, a path.
+ * Words in Russian are always a request.
+ */
+export function looksLikeCommand(input: string): boolean {
+  if (/[\u0400-\u04FF]/.test(input)) return false;
+  const [, rest] = splitSudo(input.trim());
+  const words = rest.split(/\s+/);
+  if (NEXT.get("")?.has(words[0])) return true;
+  return /^[.~/$]/.test(words[0]) || words.some((word) => /^--?[a-zA-Z]/.test(word)) || /[|<>;&$=]/.test(rest);
+}
+
 export interface Fix {
   /** The line as it was probably meant, the rest of it untouched. */
   line: string;

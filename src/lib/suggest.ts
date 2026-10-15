@@ -19,7 +19,7 @@ import { formatClock, translate } from "./i18n";
 import { useSettings } from "./settings";
 import { useVault, type SuggestState, type Suggestion, type Tab } from "./store";
 import { subcommandsAt } from "./subcommands";
-import { findFix, knownCommands } from "./typos";
+import { findFix, knownCommands, looksLikeCommand } from "./typos";
 
 const DEBOUNCE_MS = 90;
 const LIST_TTL_MS = 4000;
@@ -305,13 +305,17 @@ export class Suggester {
     // with nothing else to offer, asking it is offered.
     const answered = this.aiAnswers.get(input.trim());
     if (answered) this.show(this.withAi(local, answered, input, -1), -1);
-    else if (local.length === 0 && this.aiOffered(this.currentInput())) this.show([this.askItem()], -1);
+    else if (local.length === 0 && this.aiOffered(this.currentInput())) this.show([this.askItem(input)], -1);
     else this.show(local, -1);
   }
 
-  /** The row that asks the AI: nothing goes on the line, the AI is asked. */
-  private askItem(): Suggestion {
-    return { kind: "ask", label: translate(useSettings.getState().locale, "suggest.ai_ask"), insert: "" };
+  /**
+   * The row that asks the AI: nothing goes on the line, the AI is asked.
+   * Words are turned into a command; about a command, the AI is just asked.
+   */
+  private askItem(input: string): Suggestion {
+    const key = looksLikeCommand(input) ? "suggest.ai_ask_command" : "suggest.ai_ask";
+    return { kind: "ask", label: translate(useSettings.getState().locale, key), insert: "" };
   }
 
   /**
