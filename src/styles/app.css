@@ -5443,12 +5443,20 @@ html[data-theme="light"] .welcome-glow i:last-child {
   color: var(--text-2);
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
+  /* One height whatever it says, so the hairlines of a row stay level. */
+  box-sizing: border-box;
+  height: 35px;
 }
 
 .host-load.dim {
-  display: block;
+  display: flex;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
   color: var(--text-3);
   font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .load-gauge {
