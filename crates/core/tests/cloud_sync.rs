@@ -10,6 +10,7 @@ use std::sync::Mutex;
 
 use myssh_core::cloud::{self, DeviceInfo, Page, Transport};
 use myssh_core::keys::KeyKind;
+use myssh_core::known_hosts::{HostKeyStatus, KnownHosts};
 use myssh_core::keystore::FileKeyStore;
 use myssh_core::model::*;
 use myssh_core::sync::{Outgoing, PushResult, RemoteItem, Resolution, SETTINGS_ID};
@@ -228,6 +229,44 @@ fn key_of(view: &HostView) -> Option<Id> {
         HostAuthView::Inline { key_id, .. } => *key_id,
         HostAuthView::Identity { .. } => None,
     }
+}
+
+/// A device with its own known hosts' file: the saved hosts' keys follow
+/// the account, as in the app.
+struct Keyed {
+    device: Device,
+    known: Mutex<KnownHosts>,
+}
+
+impl cloud::VaultAccess for Keyed {
+    fn with_vault<T>(&self, f: impl FnOnce(&mut Vault) -> Result<T>) -> Result<T> {
+        f(&mut self.device.vault.lock().unwrap())
+    }
+
+    fn known_hosts(&self) -> Option<&Mutex<KnownHosts>> {
+        Some(&self.known)
+    }
+}
+
+impl Keyed {
+    fn new(vault_key: &str) -> Keyed {
+        let device = Device::new(vault_key);
+        let known = KnownHosts::open(device._dir.path().join("known_hosts.json")).unwrap();
+        Keyed { device, known: Mutex::new(known) }
+    }
+
+    async fn sync(&self, server: &FakeServer) -> cloud::SyncReport {
+        cloud::sync_with(self, server, SUFFIX).await.unwrap()
+    }
+
+    fn status(&self, host: &str, key: &russh::keys::PublicKey) -> HostKeyStatus {
+        self.known.lock().unwrap().check(host, 22, key).unwrap()
+    }
+}
+
+fn server_key() -> russh::keys::PublicKey {
+    let key = myssh_core::keys::generate(KeyKind::Ed25519, "server").unwrap();
+    russh::keys::PublicKey::from_openssh(&key.public_key).unwrap()
 }
 
 #[tokio::test]
@@ -969,4 +1008,46 @@ async fn real_server_accounts_devices_and_sync() {
         cloud::sign_in(&a.vault, &server, &email, password, device("MacBook")).await,
         Err(Error::NoAccount)
     ));
+}
+
+#[tokio::test]
+async fn the_saved_hosts_server_keys_follow_the_account() {
+    let server = FakeServer::default();
+    let vault_key = shared_key();
+    let (a, b) = (Keyed::new(&vault_key), Keyed::new(&vault_key));
+    let (first, second, elsewhere) = (server_key(), server_key(), server_key());
+
+    // Trusted on one device: for a saved host it travels, for any other it does not.
+    a.device.edit(|v| v.save_host(host("web")));
+    a.known.lock().unwrap().trust("web.example.com", 22, &first).unwrap();
+    a.known.lock().unwrap().trust("10.0.0.5", 22, &elsewhere).unwrap();
+    assert!(a.sync(&server).await.conflicts.is_empty());
+    assert!(b.sync(&server).await.conflicts.is_empty());
+    assert_eq!(b.status("web.example.com", &first), HostKeyStatus::Trusted);
+    assert_eq!(b.status("10.0.0.5", &elsewhere), HostKeyStatus::Unknown);
+    // On the other device, a different key is caught at once.
+    assert!(matches!(b.status("web.example.com", &second), HostKeyStatus::Changed(_)));
+
+    // The server's new key, accepted on the second device, is the one trusted on the first.
+    b.known.lock().unwrap().trust("web.example.com", 22, &second).unwrap();
+    b.sync(&server).await;
+    a.sync(&server).await;
+    assert_eq!(a.status("web.example.com", &second), HostKeyStatus::Trusted);
+    assert!(matches!(a.status("web.example.com", &first), HostKeyStatus::Changed(_)));
+
+    // Trusted again, alike, on a device that had not synced: no news, nothing to settle.
+    let c = Keyed::new(&vault_key);
+    c.known.lock().unwrap().trust("web.example.com", 22, &second).unwrap();
+    assert!(c.sync(&server).await.conflicts.is_empty());
+    assert_eq!(c.status("web.example.com", &second), HostKeyStatus::Trusted);
+
+    // Forgotten on one device, forgotten on all.
+    a.known.lock().unwrap().forget("web.example.com", 22).unwrap();
+    a.sync(&server).await;
+    b.sync(&server).await;
+    c.sync(&server).await;
+    assert_eq!(b.status("web.example.com", &second), HostKeyStatus::Unknown);
+    assert_eq!(c.status("web.example.com", &second), HostKeyStatus::Unknown);
+    // The key of the host that was never saved stays where it was trusted.
+    assert_eq!(a.status("10.0.0.5", &elsewhere), HostKeyStatus::Trusted);
 }

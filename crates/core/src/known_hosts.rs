@@ -1,7 +1,10 @@
 //! Trusted server host keys (trust on first use, warn on change).
 //!
 //! Kept separately from the vault: which keys a device has seen is local
-//! knowledge and is not secret.
+//! knowledge and is not secret. The keys of the saved hosts are copied into
+//! the vault as well, so that they follow the account to its other devices
+//! (see `sync`): a server checked once is not taken on trust again
+//! elsewhere.
 
 use std::path::PathBuf;
 
@@ -36,7 +39,7 @@ pub struct KnownHosts {
     entries: Vec<KnownHost>,
 }
 
-fn same_host(entry: &KnownHost, host: &str, port: u16) -> bool {
+pub(crate) fn same_host(entry: &KnownHost, host: &str, port: u16) -> bool {
     entry.port == port && entry.host.eq_ignore_ascii_case(host)
 }
 
@@ -83,6 +86,14 @@ impl KnownHosts {
             added_at: now_ms(),
         };
         self.entries.retain(|e| !same_host(e, host, port));
+        self.entries.push(entry);
+        self.save()
+    }
+
+    /// Trusts a key as another device trusted it, replacing whatever was
+    /// trusted for the host before.
+    pub fn put(&mut self, entry: KnownHost) -> Result<()> {
+        self.entries.retain(|e| !same_host(e, &entry.host, entry.port));
         self.entries.push(entry);
         self.save()
     }

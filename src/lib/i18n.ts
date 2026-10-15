@@ -129,7 +129,7 @@ const en = {
   "identity.auth.none": "No secret",
 
   "known.title": "Known hosts",
-  "known.text": "Server keys this device trusts. If a server presents a different key, MySSH stops and asks before connecting.",
+  "known.text": "Server keys this device trusts. If a server presents a different key, MySSH stops and asks before connecting. Signed in to an account, the keys of your saved hosts are trusted on your other devices too.",
   "known.empty": "No server keys yet. They appear after the first connection.",
   "known.host": "Host",
   "known.algorithm": "Key type",
@@ -1065,7 +1065,7 @@ const ru: Record<MessageKey, string> = {
   "identity.auth.none": "Без секрета",
 
   "known.title": "Известные хосты",
-  "known.text": "Ключи серверов, которым доверяет это устройство. Если сервер предъявит другой ключ, MySSH остановится и спросит вас до подключения.",
+  "known.text": "Ключи серверов, которым доверяет это устройство. Если сервер предъявит другой ключ, MySSH остановится и спросит вас до подключения. Если вы вошли в аккаунт, ключи сохранённых хостов действуют и на других ваших устройствах.",
   "known.empty": "Ключей серверов пока нет. Они появятся после первого подключения.",
   "known.host": "Хост",
   "known.algorithm": "Тип ключа",

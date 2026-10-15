@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
+use crate::known_hosts::KnownHosts;
 use crate::model::{CloudAccount, Id};
 use crate::sync::{ConflictNote, Outgoing, PushResult, RemoteItem};
 use crate::vault::Vault;
@@ -534,6 +535,12 @@ pub async fn server_info(server: &str) -> Result<ServerInfo> {
 /// short steps that read or change it, never across a network call.
 pub trait VaultAccess: Send + Sync {
     fn with_vault<T>(&self, f: impl FnOnce(&mut Vault) -> Result<T>) -> Result<T>;
+
+    /// The server keys this device trusts, when the saved hosts' keys are
+    /// to follow the account. Without them, server keys stay out of sync.
+    fn known_hosts(&self) -> Option<&std::sync::Mutex<KnownHosts>> {
+        None
+    }
 }
 
 impl VaultAccess for std::sync::Mutex<Vault> {
@@ -953,14 +960,33 @@ pub async fn sync_with(
     let key = vault_key_of(&account_of(access)?)?;
     let mut report = SyncReport::default();
 
+    // Keys trusted or forgotten here since the last time go up with the rest.
+    if let Some(known) = access.known_hosts() {
+        let file = known.lock().unwrap().entries().to_vec();
+        access.with_vault(|vault| vault.take_host_keys(&file))?;
+    }
+
     for _ in 0..MAX_ROUNDS {
         // Pull everything new.
         loop {
             let cursor = account_of(access)?.cursor;
             let page = server.pull(cursor).await?;
-            let merged = access.with_vault(|vault| {
-                vault.merge_remote(page.items, page.cursor, !page.more, &key, copy_suffix)
+            let (merged, keys) = access.with_vault(|vault| {
+                vault.merge_remote_keys(page.items, page.cursor, !page.more, &key, copy_suffix)
             })?;
+            // What other devices trusted or forgot, this one does too, at once.
+            if let Some(known) = access.known_hosts() {
+                let mut known = known.lock().unwrap();
+                for (host, port, entry) in keys {
+                    let done = match entry {
+                        Some(entry) => known.put(entry),
+                        None => known.forget(&host, port).map(|_| ()),
+                    };
+                    if let Err(error) = done {
+                        log::warn!("could not update the trusted key of {host}:{port}: {error}");
+                    }
+                }
+            }
             report.pulled += merged.applied;
             report.conflicts.extend(merged.notes);
             if merged.complete {

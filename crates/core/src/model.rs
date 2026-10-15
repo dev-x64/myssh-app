@@ -27,6 +27,11 @@ pub struct VaultData {
     pub settings: serde_json::Value,
     /// The cloud account this vault syncs with, if any.
     pub cloud: Option<CloudAccount>,
+    /// The keys this device trusts for the saved hosts, as they last stood
+    /// in step with the known hosts' file: what follows the account to the
+    /// other devices. The file itself stays the device's own (see
+    /// `known_hosts`); these are a copy of part of it.
+    pub host_keys: Vec<crate::known_hosts::KnownHost>,
     /// What the cloud is known to hold: per item, its revision there and a
     /// hash of the content at that revision. Anything that differs locally
     /// is a change waiting to be sent.

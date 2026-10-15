@@ -250,4 +250,8 @@ impl myssh_core::cloud::VaultAccess for AppState {
     fn with_vault<T>(&self, f: impl FnOnce(&mut Vault) -> Result<T>) -> Result<T> {
         AppState::with_vault(self, f)
     }
+
+    fn known_hosts(&self) -> Option<&Mutex<KnownHosts>> {
+        Some(&self.known_hosts)
+    }
 }

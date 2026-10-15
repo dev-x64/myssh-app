@@ -1,7 +1,8 @@
 //! Merging this device's vault with what the cloud holds.
 //!
-//! Sync works item by item. Each host, group, identity, snippet and synced
-//! key is one encrypted item; the server knows only its id and revision.
+//! Sync works item by item. Each host, group, identity, snippet, synced key
+//! and trusted server key is one encrypted item; the server knows only its
+//! id and revision.
 //! Nothing here talks to the network: [`crate::cloud`] moves the bytes,
 //! this module decides what they mean for the vault.
 //!
@@ -19,6 +20,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::cloud::{open_item, seal_item, VaultKey};
+use crate::known_hosts::{same_host, KnownHost};
 use crate::model::*;
 use crate::vault::Vault;
 use crate::{now_ms, Result};
@@ -36,7 +38,22 @@ pub enum ItemBody {
     Key(SshKey),
     Snippet(Snippet),
     Settings(serde_json::Value),
+    /// The key a saved host's server is trusted under.
+    HostKey(KnownHost),
 }
+
+/// The id a server's key goes by in the cloud: worked out from its address
+/// and port, so every device that trusts it names it alike.
+pub fn host_key_id(host: &str, port: u16) -> Id {
+    let digest = Sha256::digest(format!("host-key:{}:{port}", host.to_ascii_lowercase()).as_bytes());
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    Uuid::from_bytes(bytes)
+}
+
+/// What sync changed among the trusted server keys, to be done to the
+/// known hosts' file: a key to trust, or a host to forget (`None`).
+pub type HostKeyChange = (String, u16, Option<KnownHost>);
 
 impl ItemBody {
     fn kind(&self) -> &'static str {
@@ -47,6 +64,7 @@ impl ItemBody {
             ItemBody::Key(_) => "key",
             ItemBody::Snippet(_) => "snippet",
             ItemBody::Settings(_) => "settings",
+            ItemBody::HostKey(_) => "host_key",
         }
     }
 
@@ -60,6 +78,7 @@ impl ItemBody {
             ItemBody::Key(k) => k.label.clone(),
             ItemBody::Snippet(s) => s.name.clone(),
             ItemBody::Settings(_) => String::new(),
+            ItemBody::HostKey(k) => k.host.clone(),
         }
     }
 
@@ -85,6 +104,8 @@ impl ItemBody {
             ItemBody::Key(k) => k.updated_at = 0,
             ItemBody::Snippet(s) => s.updated_at = 0,
             ItemBody::Settings(_) => {}
+            // The same key trusted again is no news.
+            ItemBody::HostKey(k) => k.added_at = 0,
         }
         let bytes = serde_json::to_vec(&content).unwrap_or_default();
         Sha256::digest(&bytes)
@@ -230,6 +251,11 @@ fn join_values(base: Option<&Value>, mine: &Value, theirs: &Value, field: &str) 
 
 /// Puts together this device's version of an item and the cloud's.
 fn join(base: Option<&Value>, mine: &ItemBody, theirs: &ItemBody) -> Option<ItemBody> {
+    // A server's key trusted differently on two devices: the later trust
+    // stands, as the server most likely changed its key in between.
+    if let (ItemBody::HostKey(a), ItemBody::HostKey(b)) = (mine, theirs) {
+        return Some(if a.added_at >= b.added_at { mine.clone() } else { theirs.clone() });
+    }
     // A key is one piece: its parts make no sense from two sources.
     if matches!(mine, ItemBody::Key(_)) || mine.kind() != theirs.kind() {
         return None;
@@ -264,6 +290,9 @@ fn export(data: &VaultData) -> BTreeMap<Id, ItemBody> {
     }
     if !data.settings.is_null() {
         items.insert(SETTINGS_ID, ItemBody::Settings(data.settings.clone()));
+    }
+    for entry in &data.host_keys {
+        items.insert(host_key_id(&entry.host, entry.port), ItemBody::HostKey(entry.clone()));
     }
     items
 }
@@ -308,6 +337,10 @@ fn apply(data: &mut VaultData, body: ItemBody) {
         }
         ItemBody::Snippet(snippet) => upsert(&mut data.snippets, snippet, |s| s.id),
         ItemBody::Settings(settings) => data.settings = settings,
+        ItemBody::HostKey(entry) => {
+            data.host_keys.retain(|k| !same_host(k, &entry.host, entry.port));
+            data.host_keys.push(entry);
+        }
     }
 }
 
@@ -317,6 +350,7 @@ fn remove(data: &mut VaultData, id: Id) {
     data.identities.retain(|i| i.id != id);
     data.keys.retain(|k| k.id != id);
     data.snippets.retain(|s| s.id != id);
+    data.host_keys.retain(|k| host_key_id(&k.host, k.port) != id);
 }
 
 /// Stores this device's version of an item under a new id, marked as a
@@ -359,7 +393,7 @@ fn keep_copy(data: &mut VaultData, body: ItemBody, suffix: &str) -> bool {
             snippet.updated_at = now;
             data.snippets.push(snippet);
         }
-        ItemBody::Key(_) | ItemBody::Settings(_) => return false,
+        ItemBody::Key(_) | ItemBody::Settings(_) | ItemBody::HostKey(_) => return false,
     }
     true
 }
@@ -475,12 +509,16 @@ impl Vault {
         self.commit(|data| {
             let mut notes = Vec::new();
             let mut applied = 0usize;
+            // A server key settled between devices is not worth a word: the
+            // connection itself asks if the key it meets is not the trusted one.
             let note = |notes: &mut Vec<ConflictNote>, resolution, body: &ItemBody| {
-                notes.push(ConflictNote {
-                    resolution,
-                    item: body.kind(),
-                    name: body.name(),
-                })
+                if !matches!(body, ItemBody::HostKey(_)) {
+                    notes.push(ConflictNote {
+                        resolution,
+                        item: body.kind(),
+                        name: body.name(),
+                    })
+                }
             };
 
             for remote in items {
@@ -699,6 +737,61 @@ impl Vault {
             }
             Ok(())
         })
+    }
+
+    /// Takes into the vault what changed in the known hosts' file since the
+    /// last sync, for the saved hosts: a key trusted here, or forgotten
+    /// here. The keys of hosts no longer saved are let go. Run before
+    /// pulling, as everything sync brings is written to the file at once
+    /// (see [`Vault::merge_remote_keys`]), so whatever differs now was done
+    /// on this device.
+    pub fn take_host_keys(&mut self, file: &[KnownHost]) -> Result<()> {
+        let saved: Vec<(String, u16)> = self.data.hosts.iter().map(|h| (h.address.clone(), h.port)).collect();
+        let is_saved = |k: &KnownHost| saved.iter().any(|(address, port)| same_host(k, address, *port));
+        let mut keys: Vec<KnownHost> = self.data.host_keys.iter().filter(|k| is_saved(k)).cloned().collect();
+        for (address, port) in &saved {
+            let here = file.iter().find(|k| same_host(k, address, *port));
+            keys.retain(|k| !same_host(k, address, *port));
+            if let Some(here) = here {
+                if !keys.iter().any(|k| same_host(k, &here.host, here.port)) {
+                    keys.push(here.clone());
+                }
+            }
+        }
+        if keys == self.data.host_keys {
+            return Ok(());
+        }
+        self.commit(|data| {
+            data.host_keys = keys;
+            Ok(())
+        })
+    }
+
+    /// [`Vault::merge_remote`], also saying what it changed among the
+    /// trusted server keys, for the known hosts' file to follow.
+    pub fn merge_remote_keys(
+        &mut self,
+        items: Vec<RemoteItem>,
+        cursor: u64,
+        complete: bool,
+        key: &VaultKey,
+        copy_suffix: &str,
+    ) -> Result<(Merged, Vec<HostKeyChange>)> {
+        let before = self.data.host_keys.clone();
+        let merged = self.merge_remote(items, cursor, complete, key, copy_suffix)?;
+        let after = &self.data.host_keys;
+        let mut changes: Vec<HostKeyChange> = Vec::new();
+        for entry in after {
+            if !before.contains(entry) {
+                changes.push((entry.host.clone(), entry.port, Some(entry.clone())));
+            }
+        }
+        for entry in &before {
+            if !after.iter().any(|k| same_host(k, &entry.host, entry.port)) {
+                changes.push((entry.host.clone(), entry.port, None));
+            }
+        }
+        Ok((merged, changes))
     }
 
     pub fn mark_synced(&mut self) -> Result<()> {
