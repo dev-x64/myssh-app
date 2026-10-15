@@ -44,6 +44,11 @@ const FILE_COMMANDS = new Set([
   "grep", "diff", "ln", "pushd", "bat", "open",
 ]);
 const DIR_COMMANDS = new Set(["cd", "pushd", "rmdir"]);
+/** A prompt for something secret, just before where typing began: `Password:`, `[sudo] password for me:`, `Enter passphrase for key …:`. */
+const SECRET_PROMPT = /(password|passphrase|passcode|pin|token|secret|пароль|парольн\S*)[^:：]*[:：]\s*$/i;
+/** How long to wait for the server to echo what was typed before taking it as not echoed. */
+const ECHO_WAIT_MS = 250;
+const ECHO_WAITS = 6;
 
 /**
  * Until when the AI is not to be asked, for every terminal at once: the
@@ -89,6 +94,8 @@ export class Suggester {
   private aiAnswers = new Map<string, AiSuggestion[]>();
   /** The account's login shell on the server; `undefined` until asked. */
   private shell: string | null | undefined;
+  /** How many times the list waited for the server's echo of this line. */
+  private echoWaits = 0;
 
   constructor(private readonly host: SuggestHost) {}
 
@@ -159,6 +166,23 @@ export class Suggester {
   }
 
   /**
+   * Whether what is being typed is kept off the screen: it follows a
+   * prompt for a password or the like, or the server shows none of it.
+   * Nothing is suggested for it, and nothing of it is looked up or sent.
+   */
+  private secret(): boolean {
+    if (!this.start) return false;
+    const line = this.host.term.buffer.active.getLine(this.start.row);
+    if (SECRET_PROMPT.test(line?.translateToString(false, 0, this.start.col) ?? "")) return true;
+    return this.unechoed();
+  }
+
+  /** Typed, but none of it is on the screen. */
+  private unechoed(): boolean {
+    return this.simple && this.typed.trim() !== "" && this.screenText().trim() === "";
+  }
+
+  /**
    * Enter was pressed: remember the command.
    *
    * A command is remembered only if the terminal displayed it. Input the
@@ -189,6 +213,7 @@ export class Suggester {
     this.typed = "";
     this.simple = true;
     this.cwd = undefined;
+    this.echoWaits = 0;
     this.hide();
   }
 
@@ -206,8 +231,15 @@ export class Suggester {
   private async refresh() {
     const mine = ++this.ticket;
     const input = this.currentInput().trimStart();
-    if (!this.start || input.trim().length < 2 || this.host.liveSessionId === null) {
+    if (!this.start || input.trim().length < 2 || this.host.liveSessionId === null || this.secret()) {
       this.hide();
+      // The echo of a slow server may simply not be here yet: look again a little later.
+      if (this.start && this.unechoed() && this.echoWaits < ECHO_WAITS) {
+        this.echoWaits += 1;
+        this.timer = window.setTimeout(() => {
+          if (mine === this.ticket) void this.refresh();
+        }, ECHO_WAIT_MS);
+      }
       return;
     }
     const [history, paths] = await Promise.all([
@@ -396,7 +428,7 @@ export class Suggester {
    * first, and shows its commands with the first one selected.
    */
   private async askAi() {
-    if (!this.start || !this.aiOffered(this.currentInput())) return;
+    if (!this.start || this.secret() || !this.aiOffered(this.currentInput())) return;
     const input = this.currentInput().trim();
     const locale = useSettings.getState().locale;
     const mine = ++this.aiTicket;
