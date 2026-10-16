@@ -615,6 +615,11 @@ export class Suggester {
         return consume();
       case "Tab":
       case "Enter":
+        // With nothing but the row that asks the AI, Tab asks it at once.
+        if (state.index < 0 && event.key === "Tab" && state.items.length === 1 && state.items[0].kind === "ask") {
+          this.accept(0);
+          return consume();
+        }
         if (state.index < 0) {
           if (event.key === "Enter") this.hide();
           return true;

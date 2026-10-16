@@ -260,7 +260,11 @@ function SuggestList({ tab }: { tab: Tab }) {
           {state.note}
         </div>
       )}
-      {state.items.length > 0 && <div className="suggest-hint">{t("suggest.hint")}</div>}
+      {state.items.length > 0 && (
+        <div className="suggest-hint">
+          {state.items.length === 1 && state.items[0].kind === "ask" ? t("suggest.hint_ask") : t("suggest.hint")}
+        </div>
+      )}
     </div>
   );
 }
