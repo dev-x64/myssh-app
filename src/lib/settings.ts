@@ -117,6 +117,8 @@ export interface Settings {
   welcomed: boolean;
   /** The setup shown on first launch (look, terminal, account) has been gone through. */
   setupDone: boolean;
+  /** On Linux: putting the AppImage in the applications menu was offered once. */
+  menuEntryAsked: boolean;
   /** Advanced mode: each server's load, memory, disk and uptime, where the two below say. */
   serverStats: boolean;
   /** Advanced mode on the hosts' tiles. */
@@ -169,6 +171,7 @@ export const useSettings = create<SettingsStore>()(
       sharing: false,
       welcomed: false,
       setupDone: false,
+      menuEntryAsked: false,
       serverStats: false,
       statsTiles: true,
       statsBar: true,

@@ -24,6 +24,7 @@ import { cx, Segmented, Switch } from "../ui";
 import { DeleteAccount } from "./DeleteAccount";
 import { SecuritySection } from "./SecuritySection";
 import { SharingSection } from "./SharingSection";
+import { MenuEntrySetting } from "../MenuEntry";
 import { TerminalSample } from "./TerminalSample";
 import { ThemeGrid } from "./ThemeGrid";
 
@@ -310,6 +311,7 @@ export function SettingsView() {
 
           <div className="section-title">{t("settings.about")}</div>
           <div className="table">
+            <MenuEntrySetting />
             <Setting
               name={t("settings.version")}
               hint={

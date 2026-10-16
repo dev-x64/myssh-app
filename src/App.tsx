@@ -37,6 +37,7 @@ import { GuestPane, SharingOffDialog } from "./components/terminal/GuestPane";
 import { ShareButton, ShareMark } from "./components/terminal/SharePanel";
 import { leaveShare, receiveInvite, startGuestSync } from "./lib/guest";
 import { UpdateButton, UpdateNotice } from "./components/UpdateNotice";
+import { MenuEntryOffer } from "./components/MenuEntry";
 import { ChangeEmailDialog, openEmailDialog } from "./components/cloud/ChangeEmail";
 import { WindowControls } from "./components/WindowControls";
 import { VaultError } from "./components/VaultError";
@@ -369,6 +370,7 @@ function TitleBar() {
       )}
       <UpdateButton />
       <UpdateNotice />
+      <MenuEntryOffer />
       <ChangeEmailDialog />
       <AccountMenu />
       {WINDOWS && <WindowControls />}

@@ -125,6 +125,12 @@ export interface ImportReport {
   keys_skipped: string[];
 }
 
+/** On Linux, run as an AppImage: whether the app can be, and is, in the applications menu. */
+export interface MenuEntryStatus {
+  available: boolean;
+  installed: boolean;
+}
+
 export interface Group {
   id: Id;
   name: string;
@@ -531,6 +537,8 @@ export const api = {
   /** The hosts in a file chosen by hand: an export, an ini file, an ssh config. */
   importFile: (path: string) => invoke<ImportSource>("import_file", { path }),
   importApply: (hosts: FoundHost[]) => invoke<ImportReport>("import_apply", { hosts }),
+  menuEntryStatus: () => invoke<MenuEntryStatus>("menu_entry_status"),
+  menuEntryInstall: () => invoke<void>("menu_entry_install"),
 
   historyRecord: (hostId: Id, command: string) => invoke<void>("history_record", { hostId, command }),
   historySuggest: (hostId: Id, typed: string, limit: number) =>

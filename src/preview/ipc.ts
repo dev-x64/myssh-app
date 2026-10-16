@@ -254,6 +254,9 @@ export function createHandler(scenario: Scenario) {
       key.sync = Boolean(sync);
       return key;
     },
+    // As on a Mac: no applications menu to be put in. ?os=linux plays an AppImage.
+    menu_entry_status: () => ({ available: new URLSearchParams(location.search).get("os") === "linux", installed: false }),
+    menu_entry_install: () => undefined,
     // Other SSH clients, as if found on this computer.
     import_scan: () => [
       {

@@ -8,6 +8,7 @@ mod import;
 mod e2e;
 mod links;
 mod local;
+mod menu_entry;
 mod menu;
 mod state;
 mod update;
@@ -30,6 +31,7 @@ pub fn run() {
             app.manage(state);
             menu::install(app.handle(), "en")?;
             menu::forward_events(app.handle());
+            menu_entry::refresh();
             // On Windows the app draws its own title bar, with the tabs in it,
             // so the system's frame goes; its shadow and rounded corners stay.
             #[cfg(target_os = "windows")]
@@ -91,6 +93,8 @@ pub fn run() {
             import::import_scan,
             import::import_file,
             import::import_apply,
+            menu_entry::menu_entry_status,
+            menu_entry::menu_entry_install,
             commands::host_assign_key,
             commands::history_record,
             commands::history_suggest,

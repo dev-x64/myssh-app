@@ -25,10 +25,12 @@
 # In order:
 #   1. sets the version in Cargo.toml, tauri.conf.json and package.json;
 #   2. builds the app for the Mac and its update archive, signed with the
-#      release key, and then the app for Windows, built here on the Mac;
+#      release key, then the app for Windows, built here on the Mac, and,
+#      when asked, for Linux, in Docker (scripts/linux-build.sh);
 #   3. collects release/<version>/: the archive Macs update from and a .dmg
 #      for first installs, the installer Windows both installs and updates
-#      from, and latest.json that describes them all;
+#      from, the AppImage Linux does the same with, and latest.json that
+#      describes them all;
 #   4. commits the version change and tags it v<version> (nothing is pushed
 #      unless asked for in the menu at the end).
 #
@@ -82,6 +84,9 @@
 #                         (default ~/.myssh/windows-cert.pfx)
 #   MYSSH_WINDOWS_CERT_PASSWORD
 #                         its password; asked for when not set
+#   MYSSH_RELEASE_LINUX   "yes" also builds for Linux (x86_64): an AppImage,
+#                         which is also what copies update from. Built in
+#                         Docker, which has to be running.
 #   MYSSH_RELEASE_STORE   "yes" also packs the Windows version for the
 #                         Microsoft Store, into release/<version>/store/
 #                         (see scripts/windows-store.sh). That one is built
@@ -243,6 +248,9 @@ REPO="$(python3 -c 'import json; print(json.load(open("app.config.json")).get("u
 SERVER="$(python3 -c 'import json; print(json.load(open("app.config.json"))["cloud"]["server"].rstrip("/"))')"
 GITHUB="${MYSSH_RELEASE_GITHUB:-no}"
 WINDOWS="${MYSSH_RELEASE_WINDOWS:-yes}"
+LINUX="${MYSSH_RELEASE_LINUX:-no}"
+DOCKER=""
+! docker info > /dev/null 2>&1 || DOCKER="yes"
 STORE_TOO="${MYSSH_RELEASE_STORE:-no}"
 
 # Windows is built on this Mac, which takes a compiler that speaks its
@@ -304,6 +312,7 @@ build_kind() {
   local kind="mac"
   [ "$WINDOWS" != "yes" ] || kind="mac+windows"
   [ "$WINDOWS" != "yes" ] || [ "$STORE_TOO" != "yes" ] || kind="mac+windows+store"
+  [ "$LINUX" != "yes" ] || kind="$kind+linux"
   echo "$kind"
 }
 
@@ -477,6 +486,11 @@ if [ -n "$MENU" ]; then
   else
     warn "для Windows не хватает: ${WIN_MISSING[*]}"
   fi
+  if [ -n "$DOCKER" ]; then
+    ok "Docker запущен: можно собрать и для Linux"
+  else
+    warn "Docker не запущен: для Linux собрать не выйдет (OrbStack или Docker Desktop)"
+  fi
   if [ -n "$SIGNED" ]; then
     ok "сертификат для Windows на месте"
   else
@@ -621,6 +635,7 @@ PY
       SYSTEMS="$SYSTEMS, Windows (x64$([ -n "$SIGNED" ] && echo ", подписанный" || echo ", без подписи"))"
       [ "$STORE_TOO" != "yes" ] || SYSTEMS="$SYSTEMS, Microsoft Store"
     fi
+    [ "$LINUX" != "yes" ] || SYSTEMS="$SYSTEMS, Linux (x86_64, AppImage)"
     BEFORE="$(took_before "$(build_kind)")"
     echo
     echo "${B}Итого${R}"
@@ -634,6 +649,7 @@ PY
       "Изменить версию" \
       "Изменить системы" \
       "Изменить заметки" \
+      "Собрать и для Linux: $([ "$LINUX" = "yes" ] && echo да || echo нет)  ${D}в Docker, ещё минут 10–20${R}" \
       "Выложить и на GitHub: $([ "$GITHUB" = "yes" ] && echo да || echo нет)  ${D}только для старых тестовых сборок${R}" \
       "Отмена"
     case "$CHOICE" in
@@ -641,8 +657,17 @@ PY
       1) pick_version ;;
       2) pick_systems ;;
       3) pick_notes ;;
-      4) if [ "$GITHUB" = "yes" ]; then GITHUB="no"; else GITHUB="yes"; fi ;;
-      5) fail "отменено" ;;
+      4)
+        if [ "$LINUX" = "yes" ]; then
+          LINUX="no"
+        elif [ -z "$DOCKER" ] && ! docker info > /dev/null 2>&1; then
+          echo "  ${Y}Сначала запусти Docker (OrbStack или Docker Desktop)${R}"
+        else
+          DOCKER="yes" LINUX="yes"
+        fi
+        ;;
+      5) if [ "$GITHUB" = "yes" ]; then GITHUB="no"; else GITHUB="yes"; fi ;;
+      6) fail "отменено" ;;
     esac
   done
   echo
@@ -657,6 +682,7 @@ fi
 [ -z "$RELEASED" ] || newer "$RELEASED" "$VERSION" || fail "$VERSION не больше выпущенной $RELEASED"
 ! git rev-parse -q --verify "refs/tags/v$VERSION" > /dev/null || fail "тег v$VERSION уже есть"
 [ -n "$PUBKEY" ] || fail "в app.config.json нет updates.pubkey; запусти scripts/updater-key.sh"
+[ "$LINUX" != "yes" ] || docker info > /dev/null 2>&1 || fail "для Linux нужен запущенный Docker"
 [ "$PUBKEY" = "$(tr -d '\n' < "$KEY.pub")" ] || fail "ключ в $KEY — не тот, что в app.config.json"
 [[ "$SERVER" == https://* ]] || fail "cloud.server в app.config.json должен быть адресом https://"
 if [ -z "$MENU" ] && [ -z "$NOTARIZE" ]; then
@@ -925,6 +951,22 @@ PY
   fi
 fi
 
+# Linux: built in Docker. One AppImage, run from wherever it is saved and
+# what copies update from, signed with the release key like the others.
+if [ "$LINUX" = "yes" ]; then
+  echo "${B}release: сборка для Linux${R} ${D}(Docker)${R}"
+  LINUX_BUNDLE="$BUILD_DIR/linux-bundle"
+  rm -rf "$LINUX_BUNDLE"
+  TAURI_SIGNING_PRIVATE_KEY="$(cat "$KEY")" scripts/linux-build.sh "$LINUX_BUNDLE" \
+    "{\"bundle\":{\"createUpdaterArtifacts\":true},\"plugins\":{\"updater\":{\"pubkey\":\"$PUBKEY\"}}}" > /dev/null
+  APPIMAGE="MySSH_${VERSION}_amd64.AppImage"
+  [ -f "$LINUX_BUNDLE/$APPIMAGE" ] && [ -f "$LINUX_BUNDLE/$APPIMAGE.sig" ] \
+    || fail "сборка для Linux не оставила $APPIMAGE или его подпись"
+  cp "$LINUX_BUNDLE/$APPIMAGE" "$OUT/"
+  UPDATES+=("linux-x86_64" "$APPIMAGE" "$LINUX_BUNDLE/$APPIMAGE.sig")
+  FILES+=("$OUT/$APPIMAGE")
+fi
+
 python3 - "$VERSION" "https://github.com/$REPO/releases/download/v$VERSION" "$OUT/latest.json" "$NOTES_FILE" \
   "${UPDATES[@]}" <<'PY'
 import datetime, json, sys
@@ -967,7 +1009,7 @@ fi
 # to tens of gigabytes and costs only a few minutes to make again. Earlier
 # releases are left where they are.
 rm -rf "${BUILD_DIR:?}/release/bundle" "${BUILD_DIR:?}/debug" dist
-rm -rf "${BUILD_DIR:?}/$WIN_TARGET/release/bundle" "${BUILD_DIR:?}/$WIN_TARGET/debug"
+rm -rf "${BUILD_DIR:?}/$WIN_TARGET/release/bundle" "${BUILD_DIR:?}/$WIN_TARGET/debug" "${BUILD_DIR:?}/linux-bundle"
 find release -name .DS_Store -delete 2> /dev/null || true
 
 # Remembered, to say next time how long it will take.
