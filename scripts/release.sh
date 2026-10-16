@@ -84,9 +84,9 @@
 #                         (default ~/.myssh/windows-cert.pfx)
 #   MYSSH_WINDOWS_CERT_PASSWORD
 #                         its password; asked for when not set
-#   MYSSH_RELEASE_LINUX   "yes" also builds for Linux (x86_64): an AppImage,
-#                         which is also what copies update from. Built in
-#                         Docker, which has to be running.
+#   MYSSH_RELEASE_LINUX   "no" leaves Linux out. By default Linux (x86_64) is
+#                         built when Docker is running: an AppImage, which
+#                         is also what copies update from, built in Docker.
 #   MYSSH_RELEASE_STORE   "yes" also packs the Windows version for the
 #                         Microsoft Store, into release/<version>/store/
 #                         (see scripts/windows-store.sh). That one is built
@@ -248,9 +248,10 @@ REPO="$(python3 -c 'import json; print(json.load(open("app.config.json")).get("u
 SERVER="$(python3 -c 'import json; print(json.load(open("app.config.json"))["cloud"]["server"].rstrip("/"))')"
 GITHUB="${MYSSH_RELEASE_GITHUB:-no}"
 WINDOWS="${MYSSH_RELEASE_WINDOWS:-yes}"
-LINUX="${MYSSH_RELEASE_LINUX:-no}"
 DOCKER=""
 ! docker info > /dev/null 2>&1 || DOCKER="yes"
+# Linux is built when Docker is running, unless told otherwise.
+LINUX="${MYSSH_RELEASE_LINUX:-$([ -n "$DOCKER" ] && echo yes || echo no)}"
 STORE_TOO="${MYSSH_RELEASE_STORE:-no}"
 
 # Windows is built on this Mac, which takes a compiler that speaks its
@@ -537,23 +538,40 @@ if [ -n "$MENU" ]; then
   }
 
   pick_systems() {
-    local windows="Mac и Windows" store="Mac, Windows и Microsoft Store" default=0
-    [ "${#WIN_MISSING[@]}" -eq 0 ] || { windows="$windows  ${D}(нет инструментов)${R}"; default=1; }
+    local all="Mac, Windows и Linux" windows="Mac и Windows" store="Mac, Windows, Linux и Microsoft Store" default=0
+    local no_win="" no_docker=""
+    [ "${#WIN_MISSING[@]}" -eq 0 ] || no_win="yes"
+    docker info > /dev/null 2>&1 || no_docker="yes"
+    [ -z "$no_win" ] || { all="$all  ${D}(нет инструментов для Windows)${R}"; windows="$windows  ${D}(нет инструментов)${R}"; }
+    [ -n "$no_win" ] || [ -z "$no_docker" ] || all="$all  ${D}(Docker не запущен)${R}"
     [ -n "$STORE_TOOL" ] || store="$store  ${D}(нет makemsix: scripts/msix-tool.sh)${R}"
-    [ "$WINDOWS" = "yes" ] || default=1
-    [ "$WINDOWS" != "yes" ] || [ "$STORE_TOO" != "yes" ] || default=2
+    # What was chosen before, or what can be built at all.
+    if [ "$WINDOWS" != "yes" ]; then
+      default=2
+    elif [ "$STORE_TOO" = "yes" ]; then
+      default=3
+    elif [ "$LINUX" != "yes" ] || [ -n "$no_docker" ]; then
+      default=1
+    fi
+    [ -z "$no_win" ] || default=2
     while :; do
       choose "Для каких систем собрать?" "$default" \
+        "$all  ${D}Linux — в Docker, ещё минут 5–15${R}" \
         "$windows" \
-        "Только Mac  ${D}быстрее; Windows останется на прошлой версии${R}" \
+        "Только Mac  ${D}быстрее; остальные останутся на прошлой версии${R}" \
         "$store"
-      if [ "$CHOICE" -ne 1 ] && [ "${#WIN_MISSING[@]}" -gt 0 ]; then
+      if [ "$CHOICE" -ne 2 ] && [ -n "$no_win" ]; then
         echo "  ${Y}Для Windows сначала установи:${R}"
         printf '    %s\n' "${WIN_MISSING[@]}"
+        default=2
+        continue
+      fi
+      if { [ "$CHOICE" -eq 0 ] || [ "$CHOICE" -eq 3 ]; } && ! docker info > /dev/null 2>&1; then
+        echo "  ${Y}Для Linux сначала запусти Docker (OrbStack или Docker Desktop)${R}"
         default=1
         continue
       fi
-      if [ "$CHOICE" -eq 2 ] && [ -z "$STORE_TOOL" ]; then
+      if [ "$CHOICE" -eq 3 ] && [ -z "$STORE_TOOL" ]; then
         echo "  ${Y}Для Microsoft Store сначала запусти scripts/msix-tool.sh${R}"
         default=0
         continue
@@ -561,9 +579,10 @@ if [ -n "$MENU" ]; then
       break
     done
     case "$CHOICE" in
-      0) WINDOWS="yes" STORE_TOO="no" ;;
-      1) WINDOWS="no" STORE_TOO="no" ;;
-      2) WINDOWS="yes" STORE_TOO="yes" ;;
+      0) WINDOWS="yes" LINUX="yes" STORE_TOO="no" ;;
+      1) WINDOWS="yes" LINUX="no" STORE_TOO="no" ;;
+      2) WINDOWS="no" LINUX="no" STORE_TOO="no" ;;
+      3) WINDOWS="yes" LINUX="yes" STORE_TOO="yes" ;;
     esac
   }
 
@@ -649,7 +668,6 @@ PY
       "Изменить версию" \
       "Изменить системы" \
       "Изменить заметки" \
-      "Собрать и для Linux: $([ "$LINUX" = "yes" ] && echo да || echo нет)  ${D}в Docker, ещё минут 10–20${R}" \
       "Выложить и на GitHub: $([ "$GITHUB" = "yes" ] && echo да || echo нет)  ${D}только для старых тестовых сборок${R}" \
       "Отмена"
     case "$CHOICE" in
@@ -657,17 +675,8 @@ PY
       1) pick_version ;;
       2) pick_systems ;;
       3) pick_notes ;;
-      4)
-        if [ "$LINUX" = "yes" ]; then
-          LINUX="no"
-        elif [ -z "$DOCKER" ] && ! docker info > /dev/null 2>&1; then
-          echo "  ${Y}Сначала запусти Docker (OrbStack или Docker Desktop)${R}"
-        else
-          DOCKER="yes" LINUX="yes"
-        fi
-        ;;
-      5) if [ "$GITHUB" = "yes" ]; then GITHUB="no"; else GITHUB="yes"; fi ;;
-      6) fail "отменено" ;;
+      4) if [ "$GITHUB" = "yes" ]; then GITHUB="no"; else GITHUB="yes"; fi ;;
+      5) fail "отменено" ;;
     esac
   done
   echo
