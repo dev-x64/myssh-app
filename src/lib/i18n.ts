@@ -1,6 +1,6 @@
 // UI strings. English is the source of keys; Russian must cover all of them.
 
-import { WINDOWS } from "./platform";
+import { LINUX, WINDOWS } from "./platform";
 import { useSettings } from "./settings";
 
 const en = {
@@ -2018,10 +2018,66 @@ export function forWindows(locale: Locale, key: MessageKey, text: string): strin
   return WINDOWS_WORDS[locale].reduce((said, [what, instead]) => said.replace(what, instead), text);
 }
 
-if (WINDOWS) {
+// And on Linux, in its terms: "this Mac" is "this computer", Cmd is Ctrl,
+// and what is said of macOS's settings is said of the system's.
+const LINUX_WORDS: Record<Locale, [RegExp, string][]> = {
+  en: [
+    [/ or in Time Machine/g, ""],
+    [/ \(FileVault\)/g, ""],
+    [/\b(Mac|macOS) account\b/g, "Linux account"],
+    [/\bMac password\b/g, "login password"],
+    [/\bmacOS\b/g, "Linux"],
+    [/⌘ \(or Ctrl\)/g, "Ctrl"],
+    [/⌘/g, "Ctrl"],
+    [/\bMac\b/g, "computer"],
+  ],
+  ru: [
+    [/ или в Time Machine/g, ""],
+    [/ \(FileVault\)/g, ""],
+    [/учётная запись Mac\b/g, "учётная запись Linux"],
+    [/учётной записи macOS\b/g, "учётной записи Linux"],
+    [/пароля от Mac\b/g, "пароля от системы"],
+    [/\bmacOS\b/g, "Linux"],
+    [/⌘ \(или Ctrl\)/g, "Ctrl"],
+    [/⌘/g, "Ctrl"],
+    [/этом Mac\b/g, "этом компьютере"],
+    [/этого Mac\b/g, "этого компьютера"],
+    [/Этот Mac\b/g, "Этот компьютер"],
+    [/\bMac\b/g, "компьютер"],
+  ],
+};
+const LINUX_TEXT: Record<Locale, Partial<Record<MessageKey, string>>> = {
+  en: {
+    "sec.disk.unknown":
+      "MySSH does not check this on Linux. Disk encryption (LUKS) is usually turned on when the system is installed; with it on, lsblk shows a “crypt” device.",
+    "settings.direct.hint.checking":
+      "A firewall (ufw, firewalld) may keep MySSH off the local network. A direct connection needs it let through.",
+    "settings.direct.hint.blocked":
+      "This computer gave the app no address of its own, which usually means a firewall is not letting it onto the network. Shared sessions still work, through the sync server, with a little more delay.",
+  },
+  ru: {
+    "settings.terminal_links.hint": "Веб-адреса подсвечиваются; клик с зажатым Ctrl открывает их в браузере",
+    "sec.disk.unknown":
+      "На Linux MySSH это не проверяет. Шифрование диска (LUKS) обычно включают при установке системы; когда оно включено, lsblk показывает устройство «crypt».",
+    "settings.direct.hint.checking":
+      "Брандмауэр (ufw, firewalld) может не пускать MySSH в локальную сеть. Для прямого соединения его нужно пропустить.",
+    "settings.direct.hint.blocked":
+      "Компьютер не выдал приложению ни одного своего адреса. Обычно это значит, что брандмауэр не пускает его в сеть. Совместные сессии всё равно работают, через сервер синхронизации, с чуть большей задержкой.",
+  },
+};
+
+/** A piece of wording as it reads on Linux. */
+export function forLinux(locale: Locale, key: MessageKey, text: string): string {
+  const whole = LINUX_TEXT[locale][key];
+  if (whole !== undefined) return whole;
+  return LINUX_WORDS[locale].reduce((said, [what, instead]) => said.replace(what, instead), text);
+}
+
+if (WINDOWS || LINUX) {
+  const adapt = WINDOWS ? forWindows : forLinux;
   for (const locale of Object.keys(dictionaries) as Locale[]) {
     const words = dictionaries[locale];
-    for (const key of Object.keys(words) as MessageKey[]) words[key] = forWindows(locale, key, words[key]);
+    for (const key of Object.keys(words) as MessageKey[]) words[key] = adapt(locale, key, words[key]);
   }
 }
 

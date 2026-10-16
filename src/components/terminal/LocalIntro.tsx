@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useT } from "../../lib/i18n";
-import { WINDOWS } from "../../lib/platform";
+import { MAC } from "../../lib/platform";
 import type { Tab } from "../../lib/store";
 import { cx } from "../ui";
 
@@ -43,7 +43,7 @@ export function LocalIntro({ tab, onDone }: { tab: Tab; onDone: () => void }) {
         />
         <rect className="local-intro-cursor" x="34" y="38.5" width="14" height="5" rx="2.5" fill="var(--text)" />
       </svg>
-      <div className="local-intro-title">{t(WINDOWS ? "local.this_pc" : "local.this_mac")}</div>
+      <div className="local-intro-title">{t(MAC ? "local.this_mac" : "local.this_pc")}</div>
     </div>
   );
 }

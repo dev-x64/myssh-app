@@ -42,7 +42,7 @@ import { ChangeEmailDialog, openEmailDialog } from "./components/cloud/ChangeEma
 import { WindowControls } from "./components/WindowControls";
 import { VaultError } from "./components/VaultError";
 import { getSession, openLocal, requestCloseEditor, requestCloseTab, startSessionSync } from "./lib/sessions";
-import { WINDOWS } from "./lib/platform";
+import { MAC, WINDOWS } from "./lib/platform";
 import { ACCENT_COLOR, isDark, onSystemThemeChange, useSettings } from "./lib/settings";
 import { isLocalTab, useUi, useVault, type View } from "./lib/store";
 
@@ -195,7 +195,8 @@ function useBootstrap() {
       listen<string>("menu", (event) => onMenu(event.payload)),
       listen("link-arrived", takeLinks),
     ];
-    if (WINDOWS) window.addEventListener("keydown", onShortcut, true);
+    // Without the Mac's menu bar, the window takes the shortcuts itself.
+    if (!MAC) window.addEventListener("keydown", onShortcut, true);
     const offTheme = onSystemThemeChange(() => rerender((n) => n + 1));
     return () => {
       offTheme();

@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { leaveShare } from "../../lib/guest";
 import { useT } from "../../lib/i18n";
 import { usePlan } from "../../lib/plan";
-import { WINDOWS } from "../../lib/platform";
+import { MAC } from "../../lib/platform";
 import { useSettings } from "../../lib/settings";
 import { stopShare, useShare } from "../../lib/share";
 import { directAllowed } from "../../lib/sharewire";
@@ -89,8 +89,8 @@ export function SharingSection() {
                   <button className="btn small" onClick={check}>
                     {t("settings.direct.recheck")}
                   </button>
-                  {/* The page it opens is macOS's own; Windows has none like it. */}
-                  {!WINDOWS && (
+                  {/* The page it opens is macOS's own; Windows and Linux have none like it. */}
+                  {MAC && (
                     <button
                       className="btn small"
                       onClick={() => void api.openNetworkPrivacy().catch(reportError)}

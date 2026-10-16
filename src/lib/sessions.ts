@@ -4,7 +4,7 @@
 // reconnections. Tab metadata (status, prompts) is mirrored into the UI store.
 
 import { Channel } from "@tauri-apps/api/core";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -13,7 +13,7 @@ import { api, asApiError, type Id, type PromptReply, type SessionEvent } from ".
 import { forgetTab } from "./external";
 import { Highlighter, type HighlightColors } from "./highlight";
 import { t } from "./i18n";
-import { WINDOWS } from "./platform";
+import { LINUX, WINDOWS } from "./platform";
 import { fontStack, isDark, onSystemThemeChange, useSettings, type Settings, cursorColorOf, type CursorColor } from "./settings";
 import { useRecent } from "./recent";
 import { hostMayType, shareOutput, shareResize, stopShare } from "./share";
@@ -151,7 +151,7 @@ export class TermSession {
       }
       return true;
     });
-    this.term.attachCustomKeyEventHandler((event) => this.windowsKey(event) && this.suggester.handleKey(event));
+    this.term.attachCustomKeyEventHandler((event) => this.systemKey(event) && this.suggester.handleKey(event));
     this.term.onData((data) => this.onInput(data));
     this.term.onResize(({ cols, rows }) => {
       if (this.sessionId !== null) void api.sessionResize(this.sessionId, cols, rows).catch(() => {});
@@ -463,15 +463,34 @@ export class TermSession {
   }
 
   /**
-   * On Windows, Ctrl with C and V is how one copies and pastes, and it is
-   * also how a terminal is told to interrupt or to take the next key
-   * literally. As in Windows' own terminal: Ctrl+C copies when something
-   * is selected and interrupts otherwise, and Ctrl+V pastes. Returns
-   * `false` when the key was used here and must not reach the shell.
+   * Copying and pasting where the Mac's Cmd is not to be had. On Windows,
+   * Ctrl with C and V is how one copies and pastes, and it is also how a
+   * terminal is told to interrupt or to take the next key literally. As in
+   * Windows' own terminal: Ctrl+C copies when something is selected and
+   * interrupts otherwise, and Ctrl+V pastes. On Linux, as in its terminals,
+   * Ctrl+Shift+C copies and Ctrl+Shift+V pastes, and Ctrl+C is the shell's.
+   * Returns `false` when the key was used here and must not reach the shell.
    */
-  private windowsKey(event: KeyboardEvent): boolean {
-    if (!WINDOWS || event.type !== "keydown" || !event.ctrlKey || event.altKey) return true;
+  private systemKey(event: KeyboardEvent): boolean {
+    if (event.type !== "keydown" || !event.ctrlKey || event.altKey || event.metaKey) return true;
     const key = event.key.toLowerCase();
+    if (LINUX) {
+      if (!event.shiftKey) return true;
+      if (key === "c") {
+        if (this.term.hasSelection()) void writeText(this.term.getSelection()).catch(() => {});
+        event.preventDefault();
+        return false;
+      }
+      if (key === "v") {
+        event.preventDefault();
+        void readText()
+          .then((text) => text && this.term.paste(text))
+          .catch(() => {});
+        return false;
+      }
+      return true;
+    }
+    if (!WINDOWS) return true;
     if (key === "c" && this.term.hasSelection()) {
       void writeText(this.term.getSelection()).catch(() => {});
       this.term.clearSelection();

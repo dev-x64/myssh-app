@@ -186,6 +186,11 @@ html[data-platform="windows"] .titlebar {
   padding: 0 0 0 10px;
 }
 
+/* On Linux the system draws the window's frame, title and buttons above this bar. */
+html[data-platform="linux"] .titlebar {
+  padding-left: 10px;
+}
+
 .window-controls {
   flex: none;
   align-self: stretch;

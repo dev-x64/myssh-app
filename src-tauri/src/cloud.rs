@@ -68,10 +68,12 @@ fn computer_name() -> Option<String> {
 
 #[cfg(not(target_os = "macos"))]
 fn computer_name() -> Option<String> {
-    // Windows keeps it in COMPUTERNAME; elsewhere HOSTNAME may have it.
+    // Windows keeps it in COMPUTERNAME; elsewhere HOSTNAME may have it, and
+    // Linux keeps it in /etc/hostname (an app opened from a menu is given no HOSTNAME).
     std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .ok()
+        .or_else(|| std::fs::read_to_string("/etc/hostname").ok())
         .map(|name| name.trim().to_string())
 }
 
@@ -80,6 +82,7 @@ fn this_device() -> DeviceInfo {
     let unnamed = match std::env::consts::OS {
         "macos" => "Mac",
         "windows" => "Windows PC",
+        "linux" => "Linux",
         _ => "Computer",
     };
     let name = computer_name()

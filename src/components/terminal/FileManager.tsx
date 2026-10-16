@@ -39,7 +39,7 @@ import {
 import { api, asApiError, type ApiError, type FileEntry, type TransferProgress, type TransferSummary } from "../../lib/api";
 import { appName, openExternally, stopWatching, useExternal } from "../../lib/external";
 import { errorText, formatDateTime, formatSize, useT } from "../../lib/i18n";
-import { WINDOWS } from "../../lib/platform";
+import { LINUX, MAC, WINDOWS } from "../../lib/platform";
 import { getSession } from "../../lib/sessions";
 import {
   FILE_COLUMN_WIDTH,
@@ -458,11 +458,14 @@ function OpenWithDialog(props: {
   const t = useT();
   const recent = useSettings((s) => s.openWithApps);
   const choose = async () => {
-    // An application is a bundle in /Applications on a Mac, a program anywhere on Windows.
+    // An application is a bundle in /Applications on a Mac, a program anywhere on
+    // Windows, and on Linux any program, most of them in /usr/bin.
     const picked = await pickFile(
       WINDOWS
         ? { filters: [{ name: "Programs", extensions: ["exe"] }] }
-        : { defaultPath: "/Applications", filters: [{ name: "Applications", extensions: ["app"] }] },
+        : LINUX
+          ? { defaultPath: "/usr/bin" }
+          : { defaultPath: "/Applications", filters: [{ name: "Applications", extensions: ["app"] }] },
     ).catch(() => null);
     if (typeof picked !== "string") return;
     const settings = useSettings.getState();
@@ -1345,11 +1348,11 @@ export function FileManager({ tab }: { tab: Tab }) {
       }
       case "Backspace":
         handled();
-        if (e.metaKey) act.remove();
+        if (MAC ? e.metaKey : e.ctrlKey) act.remove();
         else goUp();
         break;
       case "a":
-        if (e.metaKey) {
+        if (MAC ? e.metaKey : e.ctrlKey) {
           handled();
           pane.setState((s) => ({ ...s, selected: new Set(s.entries.map((entry) => entry.path)) }));
         }

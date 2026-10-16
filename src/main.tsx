@@ -5,10 +5,10 @@ import "./styles/app.css";
 
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { WINDOWS } from "./lib/platform";
+import { LINUX, WINDOWS } from "./lib/platform";
 
 // The stylesheet lays the window out for the Mac and makes allowances from this.
-document.documentElement.dataset.platform = WINDOWS ? "windows" : "mac";
+document.documentElement.dataset.platform = WINDOWS ? "windows" : LINUX ? "linux" : "mac";
 
 // Handles for the development-only test bridge; absent from release builds.
 if (import.meta.env.DEV) {
