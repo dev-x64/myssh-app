@@ -26,7 +26,9 @@ pub fn install_comment(label: &str) -> String {
 ///
 /// It only ever appends. Existing lines, including their options such as
 /// `from=` or `command=`, are never rewritten, and a key that is already
-/// present in any form is left as it is.
+/// present in any form is left as it is. Where SELinux is at work, the
+/// folder and the file are given their proper labels, as `ssh-copy-id`
+/// does: a `~/.ssh` made here could otherwise be one sshd may not read.
 pub fn install_script(public_key: &str, comment: &str) -> Result<String> {
     let mut parts = public_key.split_whitespace();
     let (Some(kind), Some(blob), None) = (parts.next(), parts.next(), parts.next()) else {
@@ -56,6 +58,10 @@ pub fn install_script(public_key: &str, comment: &str) -> Result<String> {
         r#"umask 077
 dir="${{HOME:?}}/.ssh"
 file="$dir/authorized_keys"
+relabel() {{
+  if command -v restorecon >/dev/null 2>&1; then restorecon -F "$dir" "$file" >/dev/null 2>&1; fi
+  return 0
+}}
 if [ ! -d "$dir" ]; then
   mkdir -p "$dir" && chmod 700 "$dir" || {{ echo "cannot create $dir" >&2; exit 2; }}
 fi
@@ -63,6 +69,7 @@ if [ -f "$file" ] && awk -v key='{blob}' '
   /^[[:space:]]*#/ {{ next }}
   {{ for (i = 1; i <= NF; i++) if ($i == key) found = 1 }}
   END {{ exit !found }}' "$file"; then
+  relabel
   echo MYSSH_KEY_PRESENT
   exit 0
 fi
@@ -70,6 +77,7 @@ if [ -s "$file" ] && [ "$(tail -c 1 "$file" | wc -l)" -eq 0 ]; then
   printf '\n' >> "$file" || {{ echo "cannot write $file" >&2; exit 3; }}
 fi
 printf '%s\n' '{line}' >> "$file" || {{ echo "cannot write $file" >&2; exit 3; }}
+relabel
 echo MYSSH_KEY_ADDED
 "#
     ))

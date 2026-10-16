@@ -370,7 +370,7 @@ const en = {
   "install.failed": "Not installed",
   "install.unverified": "Installed, but signing in with the key failed. The host was not changed",
   "install.cancelled": "Cancelled",
-  "error.key_not_accepted": "the server did not accept the key",
+  "error.key_not_accepted": "the key is in authorized_keys, but the server did not accept it. Usually ~/.ssh or authorized_keys can be written by others (they should be 700 and 600), or the server keeps keys elsewhere (AuthorizedKeysFile in sshd_config)",
   "error.remote": "The command failed on the server",
 
   "suggest.history": "history",
@@ -1311,7 +1311,7 @@ const ru: Record<MessageKey, string> = {
   "install.failed": "Не установлен",
   "install.unverified": "Установлен, но войти по ключу не удалось. Хост не изменён",
   "install.cancelled": "Отменено",
-  "error.key_not_accepted": "сервер не принял ключ",
+  "error.key_not_accepted": "ключ записан в authorized_keys, но сервер его не принял. Обычно права на ~/.ssh или authorized_keys слишком широкие (нужны 700 и 600) или сервер берёт ключи из другого места (AuthorizedKeysFile в sshd_config)",
   "error.remote": "Команда на сервере завершилась с ошибкой",
 
   "suggest.history": "история",
