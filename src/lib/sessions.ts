@@ -93,6 +93,9 @@ function hideLinkTip() {
 
 /** How long the output has to pause before a snippet is looked at as maybe done. */
 const RUN_SETTLE_MS = 700;
+/** How long a new shell's first output has to pause before a snippet is typed, and the longest wait. */
+const READY_SETTLE_MS = 300;
+const READY_WAIT_MS = 3000;
 
 export class TermSession {
   readonly term: Terminal;
@@ -128,6 +131,8 @@ export class TermSession {
   private pendingRun: string | null = null;
   /** Looks, once the output has paused, whether a snippet sent has finished. */
   private runTimer: number | undefined;
+  /** Types the snippet waiting for the first connection, once the shell listens. */
+  private readyTimer: number | undefined;
 
   constructor(
     readonly tabId: string,
@@ -271,6 +276,7 @@ export class TermSession {
     const output = new Channel<ArrayBuffer>();
     output.onmessage = (buffer) => {
       this.runActivity();
+      if (this.pendingRun && this.tab()?.status === "connected") this.runWhenListening(true);
       if (generation !== this.generation || this.disposed) return;
       const data = new Uint8Array(buffer);
       this.term.write(data, () => {
@@ -332,11 +338,7 @@ export class TermSession {
           void api.sessionResize(this.sessionId, this.term.cols, this.term.rows).catch(() => {});
         }
         if (useUi.getState().active === this.tabId) this.focus();
-        if (this.pendingRun) {
-          const script = this.pendingRun;
-          this.pendingRun = null;
-          this.run(script);
-        }
+        if (this.pendingRun) this.runWhenListening(false);
         break;
       }
       case "closed":
@@ -452,6 +454,29 @@ export class TermSession {
     this.type(`${typed}\r`);
     this.runActivity();
     this.focus();
+  }
+
+  /**
+   * Types the snippet that waited for the connection once the shell is
+   * listening: when its first output (greeting, prompt) has paused, and at
+   * the latest a few seconds after connecting. Typed at once, it can be
+   * lost: Tailscale SSH drops what arrives before the shell has started.
+   */
+  private runWhenListening(heard: boolean) {
+    window.clearTimeout(this.readyTimer);
+    const left = READY_WAIT_MS - (Date.now() - this.connectedAt);
+    if (!heard) {
+      this.readyTimer = window.setTimeout(() => this.runWhenListening(true), Math.max(0, left));
+      return;
+    }
+    this.readyTimer = window.setTimeout(
+      () => {
+        const script = this.pendingRun;
+        this.pendingRun = null;
+        if (script) this.run(script);
+      },
+      Math.max(0, Math.min(READY_SETTLE_MS, left)),
+    );
   }
 
   /**

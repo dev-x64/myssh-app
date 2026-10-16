@@ -753,13 +753,7 @@ async fn drive(
     *connected = true;
     *io.shared.connection.lock().unwrap() = Some(handle.clone());
     io.event(SessionEvent::Connected);
-    let ended = async {
-        if let Some(script) = &params.startup {
-            channel.data(&typed(script)[..]).await?;
-        }
-        pump(&mut channel, io, commands).await
-    }
-    .await;
+    let ended = pump(&mut channel, io, commands, params.startup.as_deref().map(typed)).await;
     *io.shared.connection.lock().unwrap() = None;
     let _ = handle
         .disconnect(Disconnect::ByApplication, "", "en")
@@ -1209,15 +1203,34 @@ async fn open_shell(
     Ok(channel)
 }
 
+/// How long the shell's first output has to pause before the startup snippet
+/// is typed, and how long to wait for any output at all.
+const STARTUP_SETTLE: Duration = Duration::from_millis(300);
+const STARTUP_WAIT: Duration = Duration::from_secs(3);
+
+/// Moves the terminal's input and output until the session ends. `startup`
+/// is typed once the shell is listening: when its first output (the
+/// greeting, the prompt) has paused, or after a few seconds of none. Typed
+/// at once, it can be lost: Tailscale SSH drops what arrives before the
+/// shell has started.
 async fn pump(
     channel: &mut Channel<client::Msg>,
     io: &Io,
     commands: &mut mpsc::UnboundedReceiver<Command>,
+    mut startup: Option<Vec<u8>>,
 ) -> Result<Ended> {
     let mut exit_status = None;
+    let opened = tokio::time::Instant::now();
+    let mut heard: Option<tokio::time::Instant> = None;
     loop {
         let paused = io.shared.unacked.load(Ordering::Acquire) > HIGH_WATER;
+        let type_at = heard.map_or(opened + STARTUP_WAIT, |at| (at + STARTUP_SETTLE).min(opened + STARTUP_WAIT));
         tokio::select! {
+            _ = tokio::time::sleep_until(type_at), if startup.is_some() => {
+                if let Some(script) = startup.take() {
+                    channel.data(&script[..]).await?;
+                }
+            }
             command = commands.recv() => match command {
                 None | Some(Command::Close) => return Ok(Ended::ByUser),
                 Some(Command::Write(data)) => channel.data(&data[..]).await?,
@@ -1227,8 +1240,14 @@ async fn pump(
             },
             _ = io.shared.acked.notified(), if paused => {}
             message = channel.wait(), if !paused => match message {
-                Some(ChannelMsg::Data { data }) => io.data(data.to_vec()),
-                Some(ChannelMsg::ExtendedData { data, .. }) => io.data(data.to_vec()),
+                Some(ChannelMsg::Data { data }) => {
+                    heard = Some(tokio::time::Instant::now());
+                    io.data(data.to_vec());
+                }
+                Some(ChannelMsg::ExtendedData { data, .. }) => {
+                    heard = Some(tokio::time::Instant::now());
+                    io.data(data.to_vec());
+                }
                 Some(ChannelMsg::ExitStatus { exit_status: status }) => exit_status = Some(status),
                 Some(ChannelMsg::Close) => return Ok(Ended::Exited(exit_status)),
                 Some(_) => {}
