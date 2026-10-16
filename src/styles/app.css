@@ -1311,6 +1311,8 @@ button.chip.active {
   inset: 0;
   z-index: 40;
   display: grid;
+  /* One row the window's height, so that a dialog's max-height has something to be a share of. */
+  grid-template-rows: minmax(0, 1fr);
   place-items: center;
   padding: 24px;
   background: var(--overlay);
@@ -1392,6 +1394,8 @@ button.chip.active {
   gap: 13px;
   padding: 10px 20px 6px;
   min-height: 0;
+  /* A tall dialog scrolls between its title and its buttons, which stay in sight. */
+  overflow-y: auto;
 }
 
 .modal-body p {
@@ -2866,7 +2870,10 @@ button.fm-col:hover,
 /* ---------------------------------------------------- key installation --- */
 
 .install-hosts {
+  /* At least a few hosts in sight; in a short window the dialog scrolls instead. */
+  flex: none;
   max-height: 240px;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg-0);
@@ -5458,7 +5465,7 @@ html[data-theme="light"] .welcome-glow i:last-child {
 }
 
 .install-details pre {
-  max-height: 220px;
+  max-height: 160px;
   margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--line);
