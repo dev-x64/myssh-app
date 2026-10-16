@@ -31,7 +31,12 @@ pub fn install_comment(label: &str) -> String {
 /// write to the folder and the file (nothing else of their permissions
 /// changes, and where that is not allowed, as with a file root keeps, it
 /// is let be), and where SELinux is at work both get their proper labels,
-/// as `ssh-copy-id` gives them.
+/// as `ssh-copy-id` gives them (only the type, not the rest of the
+/// context).
+///
+/// The key counts as present only where it stands as a key, after its
+/// type, not as some other line's comment; a file that cannot be read is
+/// said so, rather than taken for one without the key.
 pub fn install_script(public_key: &str, comment: &str) -> Result<String> {
     let mut parts = public_key.split_whitespace();
     let (Some(kind), Some(blob), None) = (parts.next(), parts.next(), parts.next()) else {
@@ -63,19 +68,22 @@ dir="${{HOME:?}}/.ssh"
 file="$dir/authorized_keys"
 settle() {{
   chmod go-w "$dir" "$file" 2>/dev/null
-  if command -v restorecon >/dev/null 2>&1; then restorecon -F "$dir" "$file" >/dev/null 2>&1; fi
+  if command -v restorecon >/dev/null 2>&1; then restorecon "$dir" "$file" >/dev/null 2>&1; fi
   return 0
 }}
 if [ ! -d "$dir" ]; then
   mkdir -p "$dir" && chmod 700 "$dir" || {{ echo "cannot create $dir" >&2; exit 2; }}
 fi
-if [ -f "$file" ] && awk -v key='{blob}' '
-  /^[[:space:]]*#/ {{ next }}
-  {{ for (i = 1; i <= NF; i++) if ($i == key) found = 1 }}
-  END {{ exit !found }}' "$file"; then
-  settle
-  echo MYSSH_KEY_PRESENT
-  exit 0
+if [ -f "$file" ]; then
+  awk -v key='{blob}' '
+    /^[[:space:]]*#/ {{ next }}
+    {{ for (i = 2; i <= NF; i++) if ($i == key && $(i - 1) ~ /^(ssh-|ecdsa-|sk-)/) found = 1 }}
+    END {{ exit !found }}' "$file" 2>/dev/null
+  case $? in
+    0) settle; echo MYSSH_KEY_PRESENT; exit 0 ;;
+    1) ;;
+    *) echo "cannot read $file" >&2; exit 3 ;;
+  esac
 fi
 if [ -s "$file" ] && [ "$(tail -c 1 "$file" | wc -l)" -eq 0 ]; then
   printf '\n' >> "$file" || {{ echo "cannot write $file" >&2; exit 3; }}
@@ -251,5 +259,21 @@ mod tests {
         let mode = |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode(&dir), 0o755);
         assert_eq!(mode(&file), 0o644);
+
+        // The key as another line's comment, or commented out, is not the key.
+        std::fs::write(&file, "ssh-rsa BBBB AAAAC3Nza+/=\n# ssh-ed25519 AAAAC3Nza+/=\n").unwrap();
+        assert!(run().contains("MYSSH_KEY_ADDED"));
+        // With options before it, it is.
+        std::fs::write(&file, "from=\"10.0.0.1\",no-pty ssh-ed25519 AAAAC3Nza+/= old\n").unwrap();
+        assert!(run().contains("MYSSH_KEY_PRESENT"));
+
+        // A file that cannot be read is said so, and nothing is added to it.
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o200)).unwrap();
+        assert!(!run().contains("MYSSH_KEY"));
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "from=\"10.0.0.1\",no-pty ssh-ed25519 AAAAC3Nza+/= old\n"
+        );
     }
 }
