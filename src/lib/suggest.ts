@@ -16,6 +16,7 @@ import { containerBeingTyped, Containers } from "./containers";
 import { loadPlan, usePlan } from "./plan";
 import { redact } from "./redact";
 import { formatClock, translate } from "./i18n";
+import { MAC } from "./platform";
 import { useSettings } from "./settings";
 import { useVault, type SuggestState, type Suggestion, type Tab } from "./store";
 import { subcommandsAt } from "./subcommands";
@@ -598,7 +599,20 @@ export class Suggester {
   handleKey(event: KeyboardEvent): boolean {
     const state = this.state();
     if (!state || event.type !== "keydown") return true;
+    // The row that asks the AI, alone in the list, is asked with a click or
+    // with Cmd+Enter (Ctrl+Enter elsewhere); the arrows, Tab and Enter stay
+    // the shell's, for its history and completion.
+    const onlyAsk = state.items.length === 1 && state.items[0].kind === "ask";
+    if (onlyAsk && event.key === "Enter" && (MAC ? event.metaKey : event.ctrlKey) && !event.altKey && !event.shiftKey) {
+      event.preventDefault();
+      this.accept(0);
+      return false;
+    }
     if (event.metaKey || event.ctrlKey || event.altKey) return true;
+    if (onlyAsk && event.key !== "Escape") {
+      if (event.key === "Enter") this.hide();
+      return true;
+    }
     const consume = () => {
       event.preventDefault();
       return false;
@@ -615,11 +629,6 @@ export class Suggester {
         return consume();
       case "Tab":
       case "Enter":
-        // With nothing but the row that asks the AI, Tab asks it at once.
-        if (state.index < 0 && event.key === "Tab" && state.items.length === 1 && state.items[0].kind === "ask") {
-          this.accept(0);
-          return consume();
-        }
         if (state.index < 0) {
           if (event.key === "Enter") this.hide();
           return true;

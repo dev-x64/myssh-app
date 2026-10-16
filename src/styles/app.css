@@ -1983,6 +1983,11 @@ button.link {
   font-size: 12.5px;
 }
 
+/* Asked with a click (or Cmd+Enter), not with the keys the shell uses. */
+.suggest-item.ask {
+  cursor: pointer;
+}
+
 /* The AI says it deletes, stops or changes something: look before pressing Enter. */
 .suggest-item.danger .suggest-icon,
 .suggest-item.danger .suggest-detail {
