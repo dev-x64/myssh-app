@@ -94,6 +94,7 @@ pub fn run() {
             import::import_scan,
             import::import_file,
             import::import_apply,
+            import::tailscale_peers,
             menu_entry::menu_entry_status,
             menu_entry::menu_entry_install,
             commands::host_assign_key,

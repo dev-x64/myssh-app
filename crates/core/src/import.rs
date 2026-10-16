@@ -26,6 +26,9 @@ pub struct FoundHost {
     pub key_file: Option<String>,
     /// A password the other app keeps in a form that can be read back.
     pub password: Option<String>,
+    /// Tags for the host, such as `tailscale` for a machine of a tailnet.
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// The other apps the import knows.
@@ -37,6 +40,7 @@ pub enum SourceKind {
     Putty,
     WinScp,
     FileZilla,
+    Tailscale,
 }
 
 /// An ini file's sections, in order, each with its entries in order.
@@ -82,6 +86,7 @@ pub fn parse_text(kind: SourceKind, text: &str) -> Vec<FoundHost> {
         SourceKind::WinScp => parse_winscp(&parse_ini(text)),
         SourceKind::FileZilla => parse_filezilla(text),
         SourceKind::Putty => Vec::new(),
+        SourceKind::Tailscale => parse_tailscale(text),
     }
 }
 
@@ -159,6 +164,7 @@ pub fn parse_ssh_config(text: &str, include: &dyn Fn(&str) -> Option<Vec<String>
                 folder: Vec::new(),
                 key_file: option("identityfile").filter(|f| !f.eq_ignore_ascii_case("none")),
                 password: None,
+                tags: Vec::new(),
             });
         }
     }
@@ -215,6 +221,7 @@ pub fn parse_mobaxterm(ini: &Ini) -> Vec<FoundHost> {
                 folder: folder.clone(),
                 key_file: fields.get(14).map(|f| moba_unescape(f.trim())).filter(|f| !f.is_empty()),
                 password: None,
+                tags: Vec::new(),
             });
         }
     }
@@ -271,6 +278,7 @@ pub fn parse_putty(sessions: &[(String, BTreeMap<String, String>)]) -> Vec<Found
             folder: Vec::new(),
             key_file: get("PublicKeyFile"),
             password: None,
+            tags: Vec::new(),
         });
     }
     hosts
@@ -307,6 +315,7 @@ pub fn parse_winscp(ini: &Ini) -> Vec<FoundHost> {
             folder: parts.into_iter().filter(|p| !p.is_empty()).collect(),
             key_file: get("PublicKeyFile").map(|f| percent_decode(&f)),
             password: None,
+            tags: Vec::new(),
         });
     }
     hosts
@@ -396,6 +405,7 @@ pub fn parse_filezilla(text: &str) -> Vec<FoundHost> {
                                     folder: folders.iter().filter(|f| !f.is_empty()).cloned().collect(),
                                     key_file: get("Keyfile"),
                                     password: get("Pass"),
+                                    tags: Vec::new(),
                                 });
                             }
                         }
@@ -407,6 +417,48 @@ pub fn parse_filezilla(text: &str) -> Vec<FoundHost> {
             _ => {}
         }
     }
+    hosts
+}
+
+// ---------------------------------------------------------- Tailscale ---
+
+/// Reads `tailscale status --json`: the other machines of the tailnet, by
+/// their MagicDNS names when MagicDNS is on, else by their addresses.
+/// Phones and tablets are left out: nobody connects to them over SSH.
+pub fn parse_tailscale(text: &str) -> Vec<FoundHost> {
+    let Ok(status) = serde_json::from_str::<serde_json::Value>(text) else {
+        return Vec::new();
+    };
+    let magic_dns = status["CurrentTailnet"]["MagicDNSEnabled"].as_bool().unwrap_or(false);
+    let mut hosts: Vec<FoundHost> = status["Peer"]
+        .as_object()
+        .map(|peers| peers.values().collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|peer| !matches!(peer["OS"].as_str().unwrap_or(""), "iOS" | "android" | "tvOS"))
+        .filter_map(|peer| {
+            let name = peer["HostName"].as_str().unwrap_or("").trim().to_string();
+            let dns = peer["DNSName"].as_str().unwrap_or("").trim().trim_end_matches('.').to_string();
+            let ip = peer["TailscaleIPs"]
+                .as_array()
+                .and_then(|ips| ips.iter().filter_map(|ip| ip.as_str()).find(|ip| !ip.contains(':')))
+                .map(str::to_string);
+            let address = if magic_dns && !dns.is_empty() { Some(dns.clone()) } else { ip.or(Some(dns.clone())) };
+            let address = address.filter(|a| !a.is_empty())?;
+            let label = if name.is_empty() { dns.split('.').next().unwrap_or(&address).to_string() } else { name };
+            Some(FoundHost {
+                label,
+                address,
+                port: 22,
+                username: String::new(),
+                folder: Vec::new(),
+                key_file: None,
+                password: None,
+                tags: vec!["tailscale".into()],
+            })
+        })
+        .collect();
+    hosts.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
     hosts
 }
 
@@ -472,6 +524,28 @@ api__DIEZE__1=#109#0%api.acme.com%2200%deploy%%-1%-1%%%22%%0%0%0%%%-1%0%0%0%%108
         assert_eq!(hosts[1].folder, ["Clients", "Acme"]);
         assert_eq!(hosts[1].key_file, None);
         assert_eq!(guess_kind(text), SourceKind::MobaXterm);
+    }
+
+    #[test]
+    fn tailscale_machines_by_magic_dns_name() {
+        let status = r#"{
+          "BackendState": "Running",
+          "CurrentTailnet": {"Name": "me.github", "MagicDNSSuffix": "tail1234.ts.net", "MagicDNSEnabled": true},
+          "Self": {"HostName": "macbook", "DNSName": "macbook.tail1234.ts.net.", "OS": "macOS"},
+          "Peer": {
+            "nodekey:a": {"HostName": "web-1", "DNSName": "web-1.tail1234.ts.net.", "TailscaleIPs": ["100.101.1.2", "fd7a:115c::1"], "OS": "linux", "Online": true},
+            "nodekey:b": {"HostName": "Pixel 8", "DNSName": "pixel-8.tail1234.ts.net.", "TailscaleIPs": ["100.101.1.3"], "OS": "android", "Online": false},
+            "nodekey:c": {"HostName": "NAS", "DNSName": "nas.tail1234.ts.net.", "TailscaleIPs": ["100.101.1.4"], "OS": "linux", "Online": false}
+          }
+        }"#;
+        let hosts = parse_tailscale(status);
+        let found: Vec<(&str, &str)> = hosts.iter().map(|h| (h.label.as_str(), h.address.as_str())).collect();
+        assert_eq!(found, [("NAS", "nas.tail1234.ts.net"), ("web-1", "web-1.tail1234.ts.net")]);
+        assert_eq!(hosts[0].tags, ["tailscale"]);
+        // Without MagicDNS, the address it has in the tailnet.
+        let plain = status.replace("\"MagicDNSEnabled\": true", "\"MagicDNSEnabled\": false");
+        assert_eq!(parse_tailscale(&plain)[1].address, "100.101.1.2");
+        assert!(parse_tailscale("not json").is_empty());
     }
 
     #[test]

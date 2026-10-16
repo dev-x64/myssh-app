@@ -312,14 +312,19 @@ export class TermSession {
       case "log":
         this.patch({ log: [...(this.tab()?.log ?? []), { at: Date.now(), entry: event.entry }] });
         break;
-      case "banner":
+      case "banner": {
         this.term.write(event.text.replace(/\r?\n/g, "\r\n"));
+        // Tailscale SSH in check mode waits for a confirmation in the browser,
+        // and says where in its banner: the connection screen offers that page.
+        const link = /https:\/\/login\.tailscale\.com\/\S+/.exec(event.text)?.[0];
+        if (link) this.patch({ authLink: link });
         break;
+      }
       case "connected": {
         const reconnected = this.reconnectAttempt > 0;
         this.connectedAt = Date.now();
         this.reconnectAttempt = 0;
-        this.patch({ status: "connected", stage: null, prompt: null, everConnected: true });
+        this.patch({ status: "connected", stage: null, prompt: null, everConnected: true, authLink: null });
         if (this.hostId !== LOCAL_HOST_ID) useRecent.getState().note(this.hostId);
         if (reconnected) this.note(t("term.reconnected"));
         // The window may have been resized while connecting.

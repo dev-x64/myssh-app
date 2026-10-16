@@ -257,8 +257,21 @@ export function createHandler(scenario: Scenario) {
     // As on a Mac: no applications menu to be put in. ?os=linux plays an AppImage.
     menu_entry_status: () => ({ available: new URLSearchParams(location.search).get("os") === "linux", installed: false }),
     menu_entry_install: () => undefined,
+    // A tailnet as Tailscale on this computer would describe it.
+    tailscale_peers: () => [
+      { dns: "web-1.tail1234.ts.net", name: "web-1", ips: ["100.101.1.2"], online: true, ssh: true },
+      { dns: "nas.tail1234.ts.net", name: "nas", ips: ["100.101.1.4"], online: false, ssh: false },
+    ],
     // Other SSH clients, as if found on this computer.
     import_scan: () => [
+      {
+        kind: "tailscale",
+        location: "tailscale status",
+        hosts: [
+          { label: "nas", address: "nas.tail1234.ts.net", port: 22, username: "", folder: [], key_file: null, password: null, tags: ["tailscale"], exists: false, key_name: null, key_found: false },
+          { label: "web-1", address: "web-1.tail1234.ts.net", port: 22, username: "", folder: [], key_file: null, password: null, tags: ["tailscale"], exists: false, key_name: null, key_found: false },
+        ],
+      },
       {
         kind: "open_ssh",
         location: "/Users/me/.ssh/config",

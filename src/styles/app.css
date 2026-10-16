@@ -5499,6 +5499,67 @@ html[data-theme="light"] .welcome-glow i:last-child {
   background: transparent;
 }
 
+/* ---------------------------------------------------------- tailscale --- */
+
+/* A machine of a tailnet, on its tile: the mark, SSH when it runs Tailscale
+   SSH, and a dot for whether Tailscale sees it online. */
+.ts-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 7px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  vertical-align: 1px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.ts-badge svg {
+  fill: currentColor;
+}
+
+.ts-badge i {
+  width: 6px;
+  height: 6px;
+  margin-left: 1px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.ts-badge.online i {
+  background: var(--ok);
+}
+
+.ts-badge.unknown {
+  opacity: 0.7;
+}
+
+/* Tailscale SSH asking for a confirmation in the browser, on the connection screen. */
+.connect-check {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0 10px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.connect-check .title {
+  font-weight: 600;
+}
+
+.connect-check .hint {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
 /* ---------------------------------------------------------- run group --- */
 
 /* A snippet run on several hosts: one tab, its terminals listed at the side. */

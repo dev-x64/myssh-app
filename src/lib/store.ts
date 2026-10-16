@@ -148,6 +148,8 @@ export interface Tab {
   group?: TabGroup | null;
   /** A snippet sent to the shell: still at it, or done (the prompt is back). */
   runState?: "running" | "done" | null;
+  /** A page the server asks to be opened to let this connection in (Tailscale SSH's check). */
+  authLink?: string | null;
 }
 
 /** Terminals opened together, shown as one tab with a list of them. */

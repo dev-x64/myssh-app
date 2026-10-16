@@ -26,6 +26,8 @@ import { GroupDialog } from "./GroupDialog";
 import { HostLoad, OnlineDot } from "./HostLoad";
 import { HostPanel } from "./HostPanel";
 import { ImportDialog } from "./ImportDialog";
+import { TailscaleBadge } from "./TailscaleBadge";
+import { watchTailscale } from "../../lib/tailscale";
 import { OsIcon } from "./OsIcon";
 
 const HOST_DRAG = "application/x-myssh-host";
@@ -53,6 +55,8 @@ export function matchesHost(host: HostView, subtitle: string, query: string): bo
 export function HostsView() {
   const t = useT();
   const snapshot = useVault((s) => s.snapshot);
+  // Which of the hosts are online, as Tailscale sees it, for those of a tailnet.
+  useEffect(() => watchTailscale(snapshot.hosts), [snapshot.hosts]);
   const panel = useUi((s) => s.hostPanel);
   const setPanel = useUi((s) => s.setHostPanel);
 
@@ -384,12 +388,14 @@ export function HostsView() {
                       <div className="card-title">
                         {host.pinned && <Pin size={12} className="card-pin" aria-label={t("hosts.pinned")} />}
                         {hostTitle(host)}
+                        <TailscaleBadge host={host} />
                       </div>
                       <div className="card-sub">{hostSubtitle(host, snapshot)}</div>
                       {host.os && <div className="card-sub card-os">{host.os.name}</div>}
-                      {host.tags.length > 0 && (
+                      {host.tags.some((name) => name !== "tailscale") && (
                         <div className="card-tags">
-                          {host.tags.map((name) => (
+                          {/* The Tailscale badge by the name says that one already. */}
+                          {host.tags.filter((name) => name !== "tailscale").map((name) => (
                             <span key={name} className="chip">
                               {name}
                             </span>

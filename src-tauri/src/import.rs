@@ -135,6 +135,91 @@ fn candidates(state: &AppState, kind: SourceKind, hosts: Vec<FoundHost>) -> Resu
         .collect())
 }
 
+// ----------------------------------------------------------- Tailscale ---
+
+/// Where the Tailscale command line is, when Tailscale is installed.
+fn tailscale_cli() -> Option<PathBuf> {
+    let places: &[&str] = if cfg!(target_os = "macos") {
+        &["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/opt/homebrew/bin/tailscale", "/usr/local/bin/tailscale"]
+    } else if cfg!(windows) {
+        &[r"C:\Program Files\Tailscale\tailscale.exe", r"C:\Program Files (x86)\Tailscale\tailscale.exe"]
+    } else {
+        &["/usr/bin/tailscale", "/usr/sbin/tailscale", "/usr/local/bin/tailscale", "/snap/bin/tailscale"]
+    };
+    places.iter().map(PathBuf::from).find(|path| path.is_file())
+}
+
+/// `tailscale status --json`, when Tailscale is installed and running;
+/// given up on after a few seconds rather than waited for.
+pub fn tailscale_status() -> Option<String> {
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+    let mut command = Command::new(tailscale_cli()?);
+    command.args(["status", "--json"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        // No console window flashing up for it.
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let mut child = command.spawn().ok()?;
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => break,
+            Ok(Some(_)) | Err(_) => return None,
+            Ok(None) if started.elapsed() > Duration::from_secs(4) => {
+                let _ = child.kill();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(30)),
+        }
+    }
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut child.stdout.take()?, &mut text).ok()?;
+    Some(text)
+}
+
+/// A machine of the tailnet as the hosts' tiles need it.
+#[derive(Serialize)]
+pub struct TailscalePeer {
+    /// Its MagicDNS name, without the final dot, and its short name.
+    dns: String,
+    name: String,
+    ips: Vec<String>,
+    online: bool,
+    /// It runs Tailscale SSH: it lets people of the tailnet in without keys.
+    ssh: bool,
+}
+
+/// The machines of the tailnet and which of them are online, as Tailscale
+/// on this computer knows it; empty when it is not installed or not running.
+#[tauri::command]
+pub async fn tailscale_peers() -> Vec<TailscalePeer> {
+    let text = tauri::async_runtime::spawn_blocking(tailscale_status).await.ok().flatten();
+    let Some(status) = text.and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()) else {
+        return Vec::new();
+    };
+    status["Peer"]
+        .as_object()
+        .map(|peers| {
+            peers
+                .values()
+                .map(|peer| TailscalePeer {
+                    dns: peer["DNSName"].as_str().unwrap_or("").trim_end_matches('.').to_lowercase(),
+                    name: peer["HostName"].as_str().unwrap_or("").to_lowercase(),
+                    ips: peer["TailscaleIPs"]
+                        .as_array()
+                        .map(|ips| ips.iter().filter_map(|ip| ip.as_str().map(str::to_string)).collect())
+                        .unwrap_or_default(),
+                    online: peer["Online"].as_bool().unwrap_or(false),
+                    ssh: peer["sshHostKeys"].as_array().is_some_and(|keys| !keys.is_empty()),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 // ------------------------------------------------------------- finding ---
 
 /// The files an OpenSSH `Include` names, read: `~` and paths relative to
@@ -184,6 +269,13 @@ fn find_all() -> Vec<ImportSourceRaw> {
     let mut found = Vec::new();
     let Some(home) = home() else { return found };
     found.extend(read_file(SourceKind::OpenSsh, &home.join(".ssh").join("config")));
+    if let Some(text) = tailscale_status() {
+        found.push(ImportSourceRaw {
+            kind: SourceKind::Tailscale,
+            location: "tailscale status".into(),
+            hosts: import::parse_tailscale(&text),
+        });
+    }
 
     #[cfg(not(windows))]
     found.extend(read_file(SourceKind::FileZilla, &home.join(".config/filezilla/sitemanager.xml")));
@@ -404,7 +496,7 @@ pub async fn import_apply(state: State<'_, AppState>, hosts: Vec<FoundHost>) -> 
                 address: host.address,
                 port: Some(host.port),
                 group_id: parent,
-                tags: Vec::new(),
+                tags: host.tags,
                 auth: HostAuthInput::Inline {
                     username: host.username,
                     password: host.password.map(SecretInput::Set).unwrap_or_default(),

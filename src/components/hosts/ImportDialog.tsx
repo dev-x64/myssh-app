@@ -45,7 +45,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     const hosts: FoundHost[] = source.hosts
       .filter((_, index) => chosen.has(index))
-      .map(({ label, address, port, username, folder, key_file, password }) => ({
+      .map(({ label, address, port, username, folder, key_file, password, tags }) => ({
         label,
         address,
         port,
@@ -53,6 +53,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         folder,
         key_file,
         password,
+        tags,
       }));
     try {
       const report = await api.importApply(hosts);

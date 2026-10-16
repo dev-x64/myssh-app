@@ -88,7 +88,7 @@ export interface HostView {
 }
 
 /** The other SSH clients hosts can be imported from. */
-export type ImportKind = "open_ssh" | "moba_xterm" | "putty" | "win_scp" | "file_zilla";
+export type ImportKind = "open_ssh" | "moba_xterm" | "putty" | "win_scp" | "file_zilla" | "tailscale";
 
 /** A host found in another app. */
 export interface FoundHost {
@@ -100,6 +100,17 @@ export interface FoundHost {
   folder: string[];
   key_file: string | null;
   password: string | null;
+  tags: string[];
+}
+
+/** A machine of the tailnet, as Tailscale on this computer knows it. */
+export interface TailscalePeer {
+  dns: string;
+  name: string;
+  ips: string[];
+  online: boolean;
+  /** It runs Tailscale SSH: people of the tailnet get in without keys. */
+  ssh: boolean;
 }
 
 export interface ImportCandidate extends FoundHost {
@@ -540,6 +551,8 @@ export const api = {
   /** The hosts in a file chosen by hand: an export, an ini file, an ssh config. */
   importFile: (path: string) => invoke<ImportSource>("import_file", { path }),
   importApply: (hosts: FoundHost[]) => invoke<ImportReport>("import_apply", { hosts }),
+  /** The tailnet's machines and who is online; empty without Tailscale. */
+  tailscalePeers: () => invoke<TailscalePeer[]>("tailscale_peers"),
   menuEntryStatus: () => invoke<MenuEntryStatus>("menu_entry_status"),
   menuEntryInstall: () => invoke<void>("menu_entry_install"),
 

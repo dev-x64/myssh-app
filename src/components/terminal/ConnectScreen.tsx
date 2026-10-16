@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  ExternalLink,
   Fingerprint,
   KeyRound,
   Minus,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useEffect, useRef, useState } from "react";
-import type { HostView, LogEntry } from "../../lib/api";
+import { api, type HostView, type LogEntry } from "../../lib/api";
 import { errorText, useT } from "../../lib/i18n";
 import { closeTab, getSession } from "../../lib/sessions";
 import { hostSubtitle, useUi, useVault, type LogLine, type Tab } from "../../lib/store";
@@ -344,6 +345,17 @@ export function ConnectScreen(props: {
             );
           })}
         </ol>
+
+        {tab.authLink && !closed && (
+          <div className="connect-check">
+            <div className="title">{t("tailscale.check.title")}</div>
+            <div className="hint">{t("tailscale.check.text")}</div>
+            <button type="button" className="btn primary small" onClick={() => void api.openLink(tab.authLink!).catch(() => {})}>
+              <ExternalLink size={13} />
+              {t("tailscale.check.open")}
+            </button>
+          </div>
+        )}
 
         <div className={cx("connect-status", failed && "error")} role="status">
           {done === STEPS.length ? (
