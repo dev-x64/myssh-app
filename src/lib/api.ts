@@ -532,6 +532,9 @@ export const api = {
     invoke<number>("key_install", { keyId, hostId, events }),
   hostAssignKey: (hostId: Id, keyId: Id) => invoke<boolean>("host_assign_key", { hostId, keyId }),
 
+  /** A snippet's syntax, as `bash -n` reads it; nothing of it is run. */
+  scriptCheck: (script: string) =>
+    invoke<{ checked: boolean; error: string | null; line: number | null }>("script_check", { script }),
   /** Other SSH clients' hosts found on this computer. */
   importScan: () => invoke<ImportSource[]>("import_scan"),
   /** The hosts in a file chosen by hand: an export, an ini file, an ssh config. */

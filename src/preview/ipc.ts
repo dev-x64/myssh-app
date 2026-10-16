@@ -358,6 +358,15 @@ export function createHandler(scenario: Scenario) {
       return { suggestions: data.aiAnswer(line), plan };
     },
 
+    // bash -n in miniature: an unclosed quote or a block left open.
+    script_check: ({ script }) => {
+      const text = String(script);
+      if ((text.match(/"/g) ?? []).length % 2) return { checked: true, error: "unexpected EOF while looking for matching `\"'", line: 1 };
+      const opened = (text.match(/\b(if|do)\b/g) ?? []).length;
+      const closed = (text.match(/\b(fi|done)\b/g) ?? []).length;
+      if (opened > closed) return { checked: true, error: "syntax error: unexpected end of file", line: text.split("\n").length + 1 };
+      return { checked: true, error: null, line: null };
+    },
     history_record: () => undefined,
     history_suggest: ({ typed, limit }) =>
       data.history

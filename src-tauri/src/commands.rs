@@ -87,6 +87,53 @@ pub async fn disk_encryption() -> &'static str {
     }
 }
 
+/// What `bash -n` says of a snippet's script.
+#[derive(serde::Serialize)]
+pub struct ScriptCheck {
+    /// bash was there to ask; on Windows it usually is not.
+    checked: bool,
+    /// The first syntax error, in bash's words, without its "line N:".
+    error: Option<String>,
+    line: Option<u32>,
+}
+
+/// Checks a snippet's syntax with `bash -n`, which reads the script and
+/// runs none of it. The script goes in on standard input: nothing is
+/// written anywhere.
+#[tauri::command]
+pub async fn script_check(script: String) -> ScriptCheck {
+    let unchecked = ScriptCheck { checked: false, error: None, line: None };
+    if cfg!(windows) || script.len() > 200_000 {
+        return unchecked;
+    }
+    let ran = tauri::async_runtime::spawn_blocking(move || {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new("bash")
+            .arg("-n")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        child.stdin.take().expect("piped").write_all(script.as_bytes())?;
+        child.wait_with_output()
+    })
+    .await;
+    let Ok(Ok(output)) = ran else { return unchecked };
+    if output.status.success() {
+        return ScriptCheck { checked: true, error: None, line: None };
+    }
+    // "bash: line 3: syntax error near unexpected token `fi'"
+    let said = String::from_utf8_lossy(&output.stderr);
+    let first = said.lines().find(|l| !l.trim().is_empty()).unwrap_or("syntax error").trim();
+    let rest = first.strip_prefix("bash: ").unwrap_or(first);
+    let (line, text) = match rest.strip_prefix("line ").and_then(|r| r.split_once(": ")) {
+        Some((number, text)) => (number.trim().parse().ok(), text.to_string()),
+        None => (None, rest.to_string()),
+    };
+    ScriptCheck { checked: true, error: Some(text), line }
+}
+
 /// Rebuilds the application menu in the UI language.
 #[tauri::command]
 pub fn menu_set_locale(app: AppHandle, locale: String) -> std::result::Result<(), String> {

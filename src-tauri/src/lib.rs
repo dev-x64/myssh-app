@@ -90,6 +90,7 @@ pub fn run() {
             commands::key_delete,
             commands::key_install,
             commands::key_install_script,
+            commands::script_check,
             import::import_scan,
             import::import_file,
             import::import_apply,

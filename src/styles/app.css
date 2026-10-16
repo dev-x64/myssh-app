@@ -5499,6 +5499,134 @@ html[data-theme="light"] .welcome-glow i:last-child {
   background: transparent;
 }
 
+/* ------------------------------------------------------- snippet help --- */
+
+/* A field with a button inside its right end. */
+.with-action {
+  position: relative;
+}
+
+.with-action .input {
+  padding-right: 38px;
+}
+
+.with-action > .btn {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  color: var(--accent);
+}
+
+.with-action > .btn .spinner {
+  width: 13px;
+  height: 13px;
+  border-width: 1.5px;
+}
+
+/* What the AI wrote for the description, to take or leave. */
+.snippet-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: -6px;
+}
+
+.snippet-ai-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+}
+
+.snippet-ai-item.danger {
+  border-color: var(--danger-line);
+}
+
+.snippet-ai-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.snippet-ai-text code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.snippet-ai-text span {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.snippet-ai-item.danger .snippet-ai-text span {
+  color: var(--danger);
+}
+
+.snippet-ai-note {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+/* The script looked over: bash's verdict, then the rest, each with its fix. */
+.script-check {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -6px;
+  font-size: 12.5px;
+}
+
+.script-check.ok {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: var(--ok);
+}
+
+.script-issue {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-2);
+}
+
+.script-issue > svg {
+  flex: none;
+  color: var(--text-3);
+}
+
+.script-issue span {
+  flex: 1;
+  min-width: 0;
+}
+
+.script-issue b {
+  margin-right: 6px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.script-issue.error,
+.script-issue.error > svg {
+  color: var(--danger);
+}
+
+.script-issue.warn > svg {
+  color: var(--warn);
+}
+
+.script-issue .btn {
+  flex: none;
+}
+
 /* ------------------------------------------------------------- import --- */
 
 /* The import from other SSH clients: where from, then which hosts. */
