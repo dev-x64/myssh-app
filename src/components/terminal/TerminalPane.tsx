@@ -199,16 +199,6 @@ function SuggestList({ tab }: { tab: Tab }) {
   }, [state?.index]);
 
   if (!session || !state) return null;
-  const label = {
-    history: "suggest.history",
-    path: "suggest.path",
-    snippet: "suggest.snippet",
-    command: "suggest.command",
-    fix: "suggest.fix",
-    container: "suggest.container",
-    subcommand: "suggest.subcommand",
-    ai: "suggest.ai",
-  } as const;
   const firstFix = state.items.findIndex((item) => item.kind === "fix");
 
   return (
@@ -224,14 +214,9 @@ function SuggestList({ tab }: { tab: Tab }) {
                 role="option"
                 aria-selected={index === state.index}
                 className={cx("suggest-item", item.kind, item.danger && "danger", index === state.index && "active")}
-                // The AI's rows say what they are by their icon; a tooltip over them only covers the hint.
-                title={
-                  item.danger
-                    ? t("suggest.ai_danger")
-                    : item.kind === "ai" || item.kind === "ask"
-                      ? undefined
-                      : t(label[item.kind])
-                }
+                // Each row says what it is by its icon; a tooltip over the list only covers
+                // the rows under it. Only a warning is worth one.
+                title={item.danger ? t("suggest.ai_danger") : undefined}
                 onMouseEnter={() => setHovered(index)}
                 onMouseLeave={() => setHovered((was) => (was === index ? -1 : was))}
                 // Keep the terminal focused: act on press, not on click.
@@ -240,13 +225,15 @@ function SuggestList({ tab }: { tab: Tab }) {
                   session.suggester.accept(index);
                 }}
               >
-                <Icon size={13} className="suggest-icon" />
-                <span className="suggest-text">
-                  {match > 0 && <mark className="suggest-typed">{item.label.slice(0, match)}</mark>}
-                  {item.label.slice(match)}
-                </span>
-                {item.args && <span className="suggest-args">{item.args}</span>}
-                {item.detail && <span className="suggest-detail">{item.detail}</span>}
+                <div className="suggest-line">
+                  <Icon size={13} className="suggest-icon" />
+                  <span className="suggest-text">
+                    {match > 0 && <mark className="suggest-typed">{item.label.slice(0, match)}</mark>}
+                    {item.label.slice(match)}
+                  </span>
+                  {item.args && <span className="suggest-args">{item.args}</span>}
+                  {item.detail && <span className="suggest-detail">{item.detail}</span>}
+                </div>
                 {cut.has(index) && (index === state.index || index === hovered) && (
                   <div className="suggest-full">
                     {cut.get(index)?.command && (

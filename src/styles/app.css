@@ -1920,19 +1920,22 @@ button.link {
 }
 
 .suggest-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 8px;
-  min-height: 26px;
   padding: 0 8px;
   border-radius: 6px;
   line-height: 26px;
 }
 
+/* One line, always: what does not fit is cut short here and shown in full below. */
+.suggest-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  min-width: 0;
+}
+
 /* A row that did not fit, in full, under its one line: the command, then what it does. */
 .suggest-full {
-  flex-basis: 100%;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1995,7 +1998,8 @@ button.link {
 }
 
 .suggest-text {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
