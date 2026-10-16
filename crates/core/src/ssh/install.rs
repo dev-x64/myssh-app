@@ -26,9 +26,12 @@ pub fn install_comment(label: &str) -> String {
 ///
 /// It only ever appends. Existing lines, including their options such as
 /// `from=` or `command=`, are never rewritten, and a key that is already
-/// present in any form is left as it is. Where SELinux is at work, the
-/// folder and the file are given their proper labels, as `ssh-copy-id`
-/// does: a `~/.ssh` made here could otherwise be one sshd may not read.
+/// present in any form is left as it is. Two things are set right either
+/// way, without which sshd would refuse the key: others lose the right to
+/// write to the folder and the file (nothing else of their permissions
+/// changes, and where that is not allowed, as with a file root keeps, it
+/// is let be), and where SELinux is at work both get their proper labels,
+/// as `ssh-copy-id` gives them.
 pub fn install_script(public_key: &str, comment: &str) -> Result<String> {
     let mut parts = public_key.split_whitespace();
     let (Some(kind), Some(blob), None) = (parts.next(), parts.next(), parts.next()) else {
@@ -58,7 +61,8 @@ pub fn install_script(public_key: &str, comment: &str) -> Result<String> {
         r#"umask 077
 dir="${{HOME:?}}/.ssh"
 file="$dir/authorized_keys"
-relabel() {{
+settle() {{
+  chmod go-w "$dir" "$file" 2>/dev/null
   if command -v restorecon >/dev/null 2>&1; then restorecon -F "$dir" "$file" >/dev/null 2>&1; fi
   return 0
 }}
@@ -69,7 +73,7 @@ if [ -f "$file" ] && awk -v key='{blob}' '
   /^[[:space:]]*#/ {{ next }}
   {{ for (i = 1; i <= NF; i++) if ($i == key) found = 1 }}
   END {{ exit !found }}' "$file"; then
-  relabel
+  settle
   echo MYSSH_KEY_PRESENT
   exit 0
 fi
@@ -77,7 +81,7 @@ if [ -s "$file" ] && [ "$(tail -c 1 "$file" | wc -l)" -eq 0 ]; then
   printf '\n' >> "$file" || {{ echo "cannot write $file" >&2; exit 3; }}
 fi
 printf '%s\n' '{line}' >> "$file" || {{ echo "cannot write $file" >&2; exit 3; }}
-relabel
+settle
 echo MYSSH_KEY_ADDED
 "#
     ))
@@ -207,5 +211,45 @@ mod tests {
         // An empty comment leaves no trailing space.
         let script = install_script("ssh-ed25519 AAAA", "").unwrap();
         assert!(script.contains("'ssh-ed25519 AAAA'"));
+    }
+
+    /// The script itself, run by `sh` in a home of its own.
+    #[cfg(unix)]
+    #[test]
+    fn script_appends_once_and_takes_away_others_write() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::process::{Command, Stdio};
+
+        let home = tempfile::tempdir().unwrap();
+        let dir = home.path().join(".ssh");
+        let file = dir.join("authorized_keys");
+        std::fs::create_dir(&dir).unwrap();
+        // Another key, its line not ended, and both writable by the group.
+        std::fs::write(&file, "ssh-rsa BBBB old").unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o775)).unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o664)).unwrap();
+
+        let script = install_script("ssh-ed25519 AAAAC3Nza+/=", "laptop").unwrap();
+        let run = || {
+            let mut child = Command::new("sh")
+                .env("HOME", home.path())
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap();
+            std::io::Write::write_all(child.stdin.as_mut().unwrap(), script.as_bytes()).unwrap();
+            String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap()
+        };
+
+        assert!(run().contains("MYSSH_KEY_ADDED"));
+        assert!(run().contains("MYSSH_KEY_PRESENT"));
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "ssh-rsa BBBB old\nssh-ed25519 AAAAC3Nza+/= laptop\n"
+        );
+        // Only the others' right to write is gone; reading stays as it was.
+        let mode = |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dir), 0o755);
+        assert_eq!(mode(&file), 0o644);
     }
 }
