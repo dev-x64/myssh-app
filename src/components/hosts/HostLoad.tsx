@@ -29,6 +29,29 @@ function Gauge({ icon: Icon, value, title }: { icon: LucideIcon; value: number; 
 }
 
 /**
+ * While the first look is under way: the three columns as they will be,
+ * with a dash for each share and a light passing along the bars, so that
+ * nothing moves when the numbers come.
+ */
+function Reading({ title }: { title: string }) {
+  return (
+    <div className="host-load reading" title={title} aria-busy>
+      {[Cpu, MemoryStick, HardDrive].map((Icon, index) => (
+        <span key={index} className="load-gauge">
+          <span className="load-top">
+            <Icon size={10} className="load-icon" />
+            <span className="load-value">—</span>
+          </span>
+          <span className="load-bar">
+            <i />
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Advanced mode at the foot of a host's tile: processor, memory and disk
  * in three even columns, so that they line up from tile to tile; the
  * details on hover. A word instead when there is nothing to show.
@@ -37,7 +60,7 @@ export function HostLoad({ hostId }: { hostId: Id }) {
   const t = useT();
   const locale = useSettings((s) => s.locale);
   const load = useHostStats((s) => s.loads[hostId]);
-  if (!load) return <div className="host-load dim">{t("load.reading")}</div>;
+  if (!load) return <Reading title={t("load.reading")} />;
   if (load.problem === "sign_in") {
     return (
       <div className="host-load dim" title={t("load.sign_in.hint")}>

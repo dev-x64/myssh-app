@@ -6083,6 +6083,48 @@ html[data-theme="light"] .welcome-glow i:last-child {
   transition: width 0.4s ease;
 }
 
+/* Being read: dashes, and a light passing along empty bars, a little apart from tile to tile. */
+.host-load.reading .load-value {
+  color: var(--text-3);
+}
+
+.host-load.reading .load-bar {
+  position: relative;
+}
+
+.host-load.reading .load-bar i {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-3) 70%, transparent), transparent);
+  animation: load-reading 1.6s ease-in-out infinite;
+}
+
+.host-load.reading .load-gauge:nth-child(2) .load-bar i {
+  animation-delay: 0.15s;
+}
+
+.host-load.reading .load-gauge:nth-child(3) .load-bar i {
+  animation-delay: 0.3s;
+}
+
+@keyframes load-reading {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .host-load.reading .load-bar i {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
 .load-gauge.warn .load-value {
   color: var(--warn);
 }
