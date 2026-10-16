@@ -623,23 +623,36 @@ PY
     if [ -s notes.txt ]; then NOTES_FILE="notes.txt"; else NOTES_FILE=""; fi
   }
   pick_notes() {
-    local items=() kept="" age=""
+    local items=() actions=() age=""
     if [ -s notes.txt ]; then
       if [ -n "$LAST_TAG" ] && [ "$(stat -f %m notes.txt)" -lt "$(git log -1 --format=%ct "$LAST_TAG")" ]; then
         age="  ${Y}написаны до $LAST_TAG — возможно, старые${R}"
       fi
       NOTES_FILE="notes.txt"
-      kept="$(notes_preview)"
-      items+=("Оставить $kept$age")
+      items+=("Оставить $(notes_preview)$age") actions+=(keep)
     fi
-    items+=("Написать  ${D}откроется редактор, внизу список коммитов${R}")
-    items+=("Без заметок  ${D}можно вписать потом на панели${R}")
+    items+=("Открыть notes.txt  ${D}в приложении по умолчанию; потом вернись сюда${R}") actions+=(open)
+    items+=("Написать  ${D}откроется редактор, внизу список коммитов${R}") actions+=(edit)
+    if [ -s notes.txt ]; then
+      items+=("Очистить  ${D}notes.txt станет пустым${R}") actions+=(clear)
+    fi
+    items+=("Без заметок  ${D}можно вписать потом на панели${R}") actions+=(none)
     choose "Заметки к обновлению (их видят в окне обновления):" 0 "${items[@]}"
-    [ -n "$kept" ] || CHOICE=$((CHOICE + 1))
-    case "$CHOICE" in
-      0) NOTES_FILE="notes.txt" ;;
-      1) edit_notes ;;
-      2) NOTES_FILE="" ;;
+    case "${actions[$CHOICE]}" in
+      keep) NOTES_FILE="notes.txt" ;;
+      open)
+        touch notes.txt
+        open notes.txt || true
+        read -r -p "  Сохрани notes.txt и нажми Enter… " _ < /dev/tty
+        pick_notes
+        ;;
+      edit) edit_notes ;;
+      clear)
+        : > notes.txt
+        NOTES_FILE=""
+        pick_notes
+        ;;
+      none) NOTES_FILE="" ;;
     esac
   }
 
