@@ -25,6 +25,7 @@ import { KeychainView } from "./components/keychain/KeychainView";
 import { KnownHostsView } from "./components/known/KnownHostsView";
 import { SettingsView } from "./components/settings/SettingsView";
 import { SnippetsView } from "./components/snippets/SnippetsView";
+import { RunGroupList } from "./components/terminal/RunGroup";
 import { TerminalPane } from "./components/terminal/TerminalPane";
 import { cx, Toasts } from "./components/ui";
 import { api } from "./lib/api";
@@ -240,6 +241,7 @@ function TitleBar() {
   const openNewTab = useUi((s) => s.openNewTab);
   const closeNewTab = useUi((s) => s.closeNewTab);
   const activeTab = tabs.find((tab) => tab.id === active);
+  const groupFocus = useUi((s) => s.groupFocus);
   const fullscreen = useFullscreen();
 
   return (
@@ -254,7 +256,48 @@ function TitleBar() {
           <LayoutGrid size={15} />
           <span className="tab-title">{t("tab.home")}</span>
         </div>
-        {tabs.map((tab) => (
+        {tabs.map((tab, index) => {
+          // The terminals of a group are one tab, where the first of them stands.
+          if (tab.group) {
+            const group = tab.group;
+            if (tabs.findIndex((other) => other.group?.id === group.id) !== index) return null;
+            const members = tabs.filter((other) => other.group?.id === group.id);
+            const on = members.some((member) => member.id === active);
+            const done = members.filter((member) => member.runState === "done").length;
+            const status = members.some((m) => m.status === "connecting")
+              ? "connecting"
+              : members.every((m) => m.status === "closed")
+                ? "closed"
+                : "connected";
+            const open = () => activate(groupFocus[group.id] ?? members[0].id);
+            return (
+              <div
+                key={group.id}
+                role="tab"
+                aria-selected={on}
+                className={cx("tab", on && "active")}
+                title={group.title}
+                onMouseDown={(e) => {
+                  if (e.button === 0) open();
+                }}
+              >
+                <span className={cx("dot", status)} />
+                <span className="tab-title">{group.title}</span>
+                <span className={cx("tab-count", done === members.length && "all")}>
+                  {done}/{members.length}
+                </span>
+                <button
+                  className="tab-close"
+                  aria-label={t("tab.close")}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => members.forEach((member) => requestCloseTab(member.id))}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            );
+          }
+          return (
           <div
             key={tab.id}
             role="tab"
@@ -280,7 +323,8 @@ function TitleBar() {
               <X size={12} />
             </button>
           </div>
-        ))}
+          );
+        })}
         {guests.map((guest) => (
           <div
             key={guest.id}
@@ -454,17 +498,21 @@ export default function App() {
   // The very first launch: the basics, then the account. Later, signing
   // out brings back only the sign-in.
   const setup = !useSettings((s) => s.setupDone);
+  const activeGroup = tabs.find((tab) => tab.id === active)?.group ?? null;
 
   return (
     <div className="app">
       <TitleBar />
-      <div className="body">
+      <div className={cx("body", activeGroup && "grouped")}>
         {!loaded ? null : failed ? (
           <VaultError />
         ) : (
           <>
             {active === "home" && (setup ? <Setup /> : welcome ? <Welcome /> : <Home />)}
             {active === "new" && <NewTab />}
+            {activeGroup && (
+              <RunGroupList tabs={tabs.filter((tab) => tab.group?.id === activeGroup.id)} active={active} />
+            )}
             {tabs.map((tab) => (
               <TerminalPane key={tab.id} tab={tab} active={active === tab.id} />
             ))}

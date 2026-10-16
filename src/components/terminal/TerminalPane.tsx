@@ -1,5 +1,6 @@
 import {
   Braces,
+  Check,
   Brackets,
   ChevronDown,
   ChevronUp,
@@ -277,6 +278,37 @@ function SuggestList({ tab }: { tab: Tab }) {
   );
 }
 
+/** How long "Done" stays up after a snippet has finished. */
+const DONE_SHOWN_MS = 2400;
+
+/**
+ * A snippet sent to this terminal has finished (its prompt is back): a tick
+ * pops up at the top of the terminal for a moment, and goes.
+ */
+function RunDone({ state }: { state: Tab["runState"] }) {
+  const t = useT();
+  const [shown, setShown] = useState(0);
+  const was = useRef(state);
+  useEffect(() => {
+    if (state === "done" && was.current === "running") {
+      setShown((n) => n + 1);
+      const timer = window.setTimeout(() => setShown(0), DONE_SHOWN_MS);
+      was.current = state;
+      return () => window.clearTimeout(timer);
+    }
+    was.current = state;
+  }, [state]);
+  if (!shown) return null;
+  return (
+    <div key={shown} className="run-done" role="status">
+      <span className="run-tick">
+        <Check size={12} strokeWidth={3} />
+      </span>
+      {t("run.done")}
+    </div>
+  );
+}
+
 /** The strip under a terminal whose session is not running. */
 function ClosedBar({ tab }: { tab: Tab }) {
   const t = useT();
@@ -409,6 +441,7 @@ export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
 
   return (
     <div className={cx("term-pane", !active && "hidden")} style={{ background }} aria-hidden={!active}>
+      <RunDone state={tab.runState ?? null} />
       <ShareBar tab={tab} />
       <div className="term-main">
         <div className="term-wrap">

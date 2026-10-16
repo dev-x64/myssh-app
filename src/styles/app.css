@@ -5499,6 +5499,258 @@ html[data-theme="light"] .welcome-glow i:last-child {
   background: transparent;
 }
 
+/* ---------------------------------------------------------- run group --- */
+
+/* A snippet run on several hosts: one tab, its terminals listed at the side. */
+.body.grouped > .term-pane {
+  left: 232px;
+}
+
+.run-group {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 232px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  background: var(--bg-1);
+  z-index: 2;
+}
+
+.run-group-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 12px 10px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.run-group-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.run-group-count,
+.tab-count {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--bg-3);
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.run-group-count.all,
+.tab-count.all {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+
+.run-group-list {
+  flex: 1;
+  min-height: 0;
+  padding: 0 6px 8px;
+}
+
+.run-group-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.run-group-item:hover {
+  background: var(--bg-3);
+}
+
+.run-group-item.active {
+  background: var(--accent-soft);
+}
+
+.run-group-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--bg-3);
+  color: var(--text-2);
+}
+
+.run-group-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.run-group-text b {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-group-text small {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.run-group-item.done .run-group-text small {
+  color: var(--ok);
+}
+
+.run-group-item.closed .run-group-text small {
+  color: var(--danger);
+}
+
+.run-group-state {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+}
+
+.run-group-state .spinner {
+  width: 12px;
+  height: 12px;
+  border-width: 1.5px;
+}
+
+.run-group-close {
+  flex: none;
+  display: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.run-group-item:hover .run-group-close {
+  display: grid;
+}
+
+.run-group-item:hover .run-group-state {
+  display: none;
+}
+
+.run-group-close:hover {
+  background: var(--bg-4);
+  color: var(--text);
+}
+
+/* The tick of a finished command: it pops in with a ring going out. */
+.run-tick {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ok);
+  color: var(--bg-0);
+  animation: run-tick-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+.run-tick::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--ok);
+  opacity: 0;
+  animation: run-tick-ring 0.8s 0.1s ease-out;
+}
+
+.run-tick svg {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: run-tick-draw 0.35s 0.15s ease-out forwards;
+}
+
+@keyframes run-tick-pop {
+  from {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes run-tick-ring {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+@keyframes run-tick-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* "Done", over the top of the terminal for a moment. */
+.run-done {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 7px;
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--line));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  pointer-events: none;
+  animation: run-done 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes run-done {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.92);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
 /* ------------------------------------------------------- snippet help --- */
 
 /* A field with a button inside its right end. */

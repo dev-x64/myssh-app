@@ -144,6 +144,16 @@ export interface Tab {
   editorClosing: "editor" | "tab" | null;
   /** Suggestions for the command being typed. */
   suggest: SuggestState | null;
+  /** One of the terminals a snippet was run in on several hosts: they share one tab. */
+  group?: TabGroup | null;
+  /** A snippet sent to the shell: still at it, or done (the prompt is back). */
+  runState?: "running" | "done" | null;
+}
+
+/** Terminals opened together, shown as one tab with a list of them. */
+export interface TabGroup {
+  id: string;
+  title: string;
 }
 
 /** A terminal someone else shares, watched from this app. */
@@ -245,6 +255,8 @@ interface UiStore {
   /** `"home"`, `"new"` (the new-tab page) or a tab id. */
   active: string;
   tabs: Tab[];
+  /** For each group of terminals, the one last looked at in it. */
+  groupFocus: Record<string, string>;
   /** The new-tab page is open, after the terminal tabs. */
   newTab: boolean;
   /** Shared terminals of other people, after the terminal tabs. */
@@ -276,6 +288,7 @@ let toastSeq = 1;
 export const useUi = create<UiStore>((set, get) => ({
   view: "hosts",
   active: "home",
+  groupFocus: {},
   tabs: [],
   newTab: false,
   guests: [],
@@ -284,7 +297,11 @@ export const useUi = create<UiStore>((set, get) => ({
   hostDraft: null,
   setView: (view) => set({ view }),
   goHome: (view) => set((s) => ({ active: "home", view: view ?? s.view })),
-  activate: (id) => set({ active: id }),
+  activate: (id) =>
+    set((s) => {
+      const group = s.tabs.find((t) => t.id === id)?.group;
+      return { active: id, groupFocus: group ? { ...s.groupFocus, [group.id]: id } : s.groupFocus };
+    }),
   cycle: (step) => {
     const order = [
       "home",
@@ -318,11 +335,14 @@ export const useUi = create<UiStore>((set, get) => ({
       const index = s.tabs.findIndex((t) => t.id === id);
       if (index < 0) return s;
       const tabs = s.tabs.filter((t) => t.id !== id);
-      // Closing the active tab lands on its neighbour, or home.
+      // Closing the active tab lands on another terminal of its group, else
+      // on its neighbour, or home.
+      const group = s.tabs[index].group;
+      const sibling = group ? tabs.find((t) => t.group?.id === group.id) : undefined;
       const active =
         s.active !== id
           ? s.active
-          : ((tabs[index] ?? tabs[index - 1])?.id ?? (s.newTab ? "new" : "home"));
+          : (sibling?.id ?? (tabs[index] ?? tabs[index - 1])?.id ?? (s.newTab ? "new" : "home"));
       return { tabs, active };
     }),
   // Closing the panel, or turning it to another host, drops the draft.

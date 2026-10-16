@@ -17,7 +17,7 @@ import { LINUX, WINDOWS } from "./platform";
 import { fontStack, isDark, onSystemThemeChange, useSettings, type Settings, cursorColorOf, type CursorColor } from "./settings";
 import { useRecent } from "./recent";
 import { hostMayType, shareOutput, shareResize, stopShare } from "./share";
-import { hostTitle, LOCAL_HOST_ID, useUi, useVault, type Tab } from "./store";
+import { hostTitle, LOCAL_HOST_ID, useUi, useVault, type Tab, type TabGroup } from "./store";
 import { Suggester } from "./suggest";
 import { resolveTermTheme } from "./themes";
 
@@ -91,6 +91,9 @@ function hideLinkTip() {
   if (linkTip) linkTip.hidden = true;
 }
 
+/** How long the output has to pause before a snippet is looked at as maybe done. */
+const RUN_SETTLE_MS = 700;
+
 export class TermSession {
   readonly term: Terminal;
   readonly search = new SearchAddon();
@@ -123,6 +126,8 @@ export class TermSession {
 
   /** A snippet to run once the first connection is up: run on several hosts at once. */
   private pendingRun: string | null = null;
+  /** Looks, once the output has paused, whether a snippet sent has finished. */
+  private runTimer: number | undefined;
 
   constructor(
     readonly tabId: string,
@@ -265,6 +270,7 @@ export class TermSession {
     };
     const output = new Channel<ArrayBuffer>();
     output.onmessage = (buffer) => {
+      this.runActivity();
       if (generation !== this.generation || this.disposed) return;
       const data = new Uint8Array(buffer);
       this.term.write(data, () => {
@@ -437,8 +443,28 @@ export class TermSession {
     const typed = text.replace(/\r\n/g, "\n").replace(/\n+$/, "").replace(/\n/g, "\r");
     // Run as a whole; it is not something the user is typing.
     this.suggester.reset();
+    this.patch({ runState: "running" });
     this.type(`${typed}\r`);
+    this.runActivity();
     this.focus();
+  }
+
+  /**
+   * A terminal does not say when a command is done; the shell's prompt
+   * coming back does. So while a snippet is running, each time the output
+   * pauses the line the cursor is on is looked at: ending as a prompt does
+   * (`$`, `#`, `%`, `>`), the snippet is taken as done.
+   */
+  private runActivity() {
+    if (this.tab()?.runState !== "running") return;
+    window.clearTimeout(this.runTimer);
+    this.runTimer = window.setTimeout(() => {
+      if (this.tab()?.runState !== "running") return;
+      const buffer = this.term.buffer.active;
+      const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true, 0, buffer.cursorX) ?? "";
+      if (/[$#%>❯]\s?$/.test(line)) this.patch({ runState: "done" });
+      else this.runActivity();
+    }, RUN_SETTLE_MS);
   }
 
   /**
@@ -584,11 +610,14 @@ export function getSession(tabId: string): TermSession | undefined {
   return sessions.get(tabId);
 }
 
-/** Opens a new terminal tab for the host; `run` is a snippet to run once it is connected. */
-export function openHost(hostId: Id, run: string | null = null) {
+/**
+ * Opens a new terminal tab for the host; `run` is a snippet to run once it
+ * is connected. Terminals given the same `group` share one tab.
+ */
+export function openHost(hostId: Id, run: string | null = null, group: TabGroup | null = null) {
   const host = useVault.getState().snapshot.hosts.find((h) => h.id === hostId);
   if (!host) return;
-  openTab(hostId, hostTitle(host), run);
+  openTab(hostId, hostTitle(host), run, group);
 }
 
 /** Opens a new tab with a terminal on this computer. */
@@ -596,7 +625,7 @@ export function openLocal() {
   openTab(LOCAL_HOST_ID, t("local.title"));
 }
 
-function openTab(hostId: Id, title: string, run: string | null = null) {
+function openTab(hostId: Id, title: string, run: string | null = null, group: TabGroup | null = null) {
   const id = `tab-${tabSeq++}`;
   sessions.set(id, new TermSession(id, hostId, run));
   useUi.getState().addTab({
@@ -620,6 +649,8 @@ function openTab(hostId: Id, title: string, run: string | null = null) {
     editorDirty: false,
     editorClosing: null,
     suggest: null,
+    group,
+    runState: null,
   });
 }
 

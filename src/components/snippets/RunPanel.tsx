@@ -4,7 +4,7 @@ import { reportError } from "../../lib/actions";
 import { api, type Group, type HostView, type Id, type Snippet } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { openHost } from "../../lib/sessions";
-import { compareHosts, hostSubtitle, hostTitle, useVault } from "../../lib/store";
+import { compareHosts, hostSubtitle, hostTitle, useUi, useVault } from "../../lib/store";
 import { OsIcon } from "../hosts/OsIcon";
 import { cx, Switch } from "../ui";
 
@@ -77,7 +77,13 @@ export function RunPanel({ snippet, onClose }: { snippet: Snippet; onClose: () =
     if (wanted.join() !== remembered.join()) {
       await api.snippetTargets(snippet.id, wanted).catch(reportError);
     }
-    for (const hostId of targets) openHost(hostId, snippet.script);
+    // On several hosts the terminals share one tab, with a list of them at its side.
+    const group = targets.length > 1 ? { id: `run-${Date.now()}`, title: snippet.name } : null;
+    for (const hostId of targets) openHost(hostId, snippet.script, group);
+    if (group) {
+      const first = useUi.getState().tabs.find((tab) => tab.group?.id === group.id);
+      if (first) useUi.getState().activate(first.id);
+    }
     onClose();
   };
 
