@@ -71,7 +71,7 @@ function HostKeyPrompt({ prompt, onReply, scope = "tab" }: Props<Extract<Prompt,
   );
 }
 
-/** One text answer with an optional "remember" choice. */
+/** One text answer with a "remember" choice, ticked to begin with. */
 function TextPrompt(props: {
   title: string;
   text: string;
@@ -84,7 +84,9 @@ function TextPrompt(props: {
 }) {
   const t = useT();
   const [value, setValue] = useState("");
-  const [remember, setRemember] = useState(false);
+  // Saved unless said otherwise: the vault keeps it encrypted, and asking again
+  // at every connection is what most people would rather not have.
+  const [remember, setRemember] = useState(true);
 
   return (
     <Modal
