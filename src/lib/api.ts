@@ -87,6 +87,44 @@ export interface HostView {
   updated_at: number;
 }
 
+/** The other SSH clients hosts can be imported from. */
+export type ImportKind = "open_ssh" | "moba_xterm" | "putty" | "win_scp" | "file_zilla";
+
+/** A host found in another app. */
+export interface FoundHost {
+  label: string;
+  address: string;
+  port: number;
+  username: string;
+  /** The folders it sits in there, outermost first. */
+  folder: string[];
+  key_file: string | null;
+  password: string | null;
+}
+
+export interface ImportCandidate extends FoundHost {
+  /** A host with the same address, port and user is saved already. */
+  exists: boolean;
+  key_name: string | null;
+  /** The key file is on this computer and can be read. */
+  key_found: boolean;
+}
+
+export interface ImportSource {
+  kind: ImportKind;
+  /** A file, or the Windows registry. */
+  location: string;
+  hosts: ImportCandidate[];
+}
+
+export interface ImportReport {
+  hosts: number;
+  groups: number;
+  keys: number;
+  /** Key files that could not be taken. */
+  keys_skipped: string[];
+}
+
 export interface Group {
   id: Id;
   name: string;
@@ -487,6 +525,12 @@ export const api = {
   keyInstall: (keyId: Id, hostId: Id, events: Channel<SessionEvent>) =>
     invoke<number>("key_install", { keyId, hostId, events }),
   hostAssignKey: (hostId: Id, keyId: Id) => invoke<boolean>("host_assign_key", { hostId, keyId }),
+
+  /** Other SSH clients' hosts found on this computer. */
+  importScan: () => invoke<ImportSource[]>("import_scan"),
+  /** The hosts in a file chosen by hand: an export, an ini file, an ssh config. */
+  importFile: (path: string) => invoke<ImportSource>("import_file", { path }),
+  importApply: (hosts: FoundHost[]) => invoke<ImportReport>("import_apply", { hosts }),
 
   historyRecord: (hostId: Id, command: string) => invoke<void>("history_record", { hostId, command }),
   historySuggest: (hostId: Id, typed: string, limit: number) =>

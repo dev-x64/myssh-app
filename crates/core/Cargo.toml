@@ -23,6 +23,8 @@ argon2 = "0.5"
 hkdf = "0.12"
 sha2 = "0.10"
 base64 = "0.22"
+# Reading FileZilla's site list, for the import.
+quick-xml = "0.37"
 reqwest = { version = "0.13", default-features = false, features = ["json", "query", "native-tls"] }
 
 [dev-dependencies]

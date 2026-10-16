@@ -254,6 +254,53 @@ export function createHandler(scenario: Scenario) {
       key.sync = Boolean(sync);
       return key;
     },
+    // Other SSH clients, as if found on this computer.
+    import_scan: () => [
+      {
+        kind: "open_ssh",
+        location: "/Users/me/.ssh/config",
+        hosts: [
+          { label: "web-1", address: "10.0.0.5", port: 22, username: "deploy", folder: [], key_file: "/Users/me/.ssh/deploy_ed25519", password: null, exists: true, key_name: "deploy_ed25519", key_found: true },
+          { label: "orb", address: "127.0.0.1", port: 32222, username: "me", folder: [], key_file: "/Users/me/.ssh/id_ed25519", password: null, exists: false, key_name: "id_ed25519", key_found: true },
+          { label: "bastion", address: "bastion.example.com", port: 22, username: "ops", folder: [], key_file: "/Users/me/.ssh/ops_rsa", password: null, exists: false, key_name: "ops_rsa", key_found: false },
+        ],
+      },
+      {
+        kind: "file_zilla",
+        location: "/Users/me/.config/filezilla/sitemanager.xml",
+        hosts: [
+          { label: "Shop", address: "sftp.shop.example", port: 2222, username: "shop", folder: ["Clients"], key_file: null, password: "x", exists: false, key_name: null, key_found: false },
+          { label: "Media", address: "media.example", port: 22, username: "upload", folder: ["Clients"], key_file: null, password: "x", exists: false, key_name: null, key_found: false },
+        ],
+      },
+    ],
+    import_file: ({ path }) => ({
+      kind: "moba_xterm",
+      location: String(path),
+      hosts: [
+        { label: "prod-api", address: "api.acme.com", port: 22, username: "root", folder: ["Acme", "Prod"], key_file: null, password: null, exists: false, key_name: null, key_found: false },
+        { label: "prod-db", address: "db.acme.com", port: 22, username: "root", folder: ["Acme", "Prod"], key_file: null, password: null, exists: false, key_name: null, key_found: false },
+        { label: "staging", address: "stage.acme.com", port: 2200, username: "deploy", folder: ["Acme"], key_file: null, password: null, exists: false, key_name: null, key_found: false },
+      ],
+    }),
+    import_apply: ({ hosts }) => {
+      const list = hosts as { label: string; address: string; port: number; username: string }[];
+      for (const host of list) {
+        vault.hosts.push({
+          ...vault.hosts[0],
+          id: crypto.randomUUID(),
+          label: host.label,
+          address: host.address,
+          port: host.port,
+          group_id: null,
+          tags: [],
+          pinned: false,
+          os: null,
+          auth: { kind: "inline", username: host.username, has_password: false, key_id: null },
+        });
+      }
+      return { hosts: list.length, groups: 0, keys: 1, keys_skipped: [] };
+    },
     // The script as the app builds it (crates/core/src/ssh/install.rs), for a made-up key.
     key_install_script: () =>
       [

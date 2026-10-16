@@ -28,3 +28,7 @@ uuid = { version = "1", features = ["v4"] }
 # The terminal on this computer: a pseudo-terminal on macOS, ConPTY on Windows.
 portable-pty = "0.9"
 tauri-plugin-deep-link = "2"
+
+# Where PuTTY, WinSCP and MobaXterm keep their sessions, for the import.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"

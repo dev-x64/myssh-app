@@ -3,6 +3,7 @@
 mod cloud;
 mod commands;
 mod files;
+mod import;
 #[cfg(debug_assertions)]
 mod e2e;
 mod links;
@@ -87,6 +88,9 @@ pub fn run() {
             commands::key_delete,
             commands::key_install,
             commands::key_install_script,
+            import::import_scan,
+            import::import_file,
+            import::import_apply,
             commands::host_assign_key,
             commands::history_record,
             commands::history_suggest,

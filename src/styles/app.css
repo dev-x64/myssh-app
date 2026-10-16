@@ -1058,6 +1058,14 @@ button.chip.active {
   text-align: center;
 }
 
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .empty .glyph {
   display: grid;
   place-items: center;
@@ -5484,6 +5492,140 @@ html[data-theme="light"] .welcome-glow i:last-child {
 
 .install-details pre::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ------------------------------------------------------------- import --- */
+
+/* The import from other SSH clients: where from, then which hosts. */
+.import-wait {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+}
+
+.import-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.import-source {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.import-source:hover {
+  border-color: var(--line-strong);
+  background: var(--bg-3);
+}
+
+.import-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.import-main b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-main small {
+  color: var(--text-3);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.import-pick p {
+  font-size: 12px;
+}
+
+.import-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.import-hosts {
+  flex: none;
+  max-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+}
+
+.import-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px 5px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-1);
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.import-hosts > div:first-child > .import-folder {
+  border-top: none;
+}
+
+.import-host {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 11px;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.import-hosts > div:first-child > .import-host:first-child {
+  border-top: none;
+}
+
+.import-host input {
+  accent-color: var(--accent);
+}
+
+.import-host.exists .import-main {
+  opacity: 0.6;
+}
+
+.import-tags {
+  flex: none;
+  display: flex;
+  gap: 5px;
+  max-width: 50%;
+  overflow: hidden;
+}
+
+.import-tags .chip.warn {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  color: var(--warn);
 }
 
 /* --------------------------------------------------------- host load --- */

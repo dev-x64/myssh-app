@@ -137,6 +137,37 @@ pub fn import(
     })
 }
 
+/// Imports a key found on disk, asking nothing: an unencrypted key as it
+/// is, and an encrypted OpenSSH key with its passphrase to be asked for on
+/// connecting (its public half can be read without it). An encrypted key
+/// of another format is [`Error::KeyEncrypted`]: without the passphrase
+/// nothing of it can be read.
+pub fn import_found(text: &str, label: &str) -> Result<SshKey> {
+    match import(text, None, false, label) {
+        Err(Error::KeyEncrypted) => {
+            let text = text.trim();
+            let private = PrivateKey::from_openssh(text).map_err(|_| Error::KeyEncrypted)?;
+            let (algorithm, public_key, fingerprint) = describe(&private)?;
+            let now = now_ms();
+            Ok(SshKey {
+                id: Uuid::new_v4(),
+                label: label.trim().to_string(),
+                algorithm,
+                private_key: format!("{text}\n"),
+                public_key,
+                fingerprint,
+                encrypted: true,
+                passphrase: None,
+                origin: KeyOrigin::Imported,
+                sync: false,
+                created_at: now,
+                updated_at: now,
+            })
+        }
+        other => other,
+    }
+}
+
 /// Decodes private key text into a usable key.
 ///
 /// Returns [`Error::KeyEncrypted`] when a passphrase is required but missing,
@@ -164,6 +195,20 @@ mod tests {
             let private = decrypt(&key.private_key, None).unwrap();
             assert_eq!(fingerprint(private.public_key()), key.fingerprint);
         }
+    }
+
+    #[test]
+    fn a_found_encrypted_openssh_key_comes_in_locked() {
+        let mut rng = russh::keys::key::safe_rng();
+        let private = PrivateKey::random(&mut rng, Algorithm::Ed25519).unwrap();
+        let locked = private.encrypt(&mut rng, "pw").unwrap();
+        let text = locked.to_openssh(LineEnding::LF).unwrap();
+        let key = import_found(&text, "found").unwrap();
+        assert!(key.encrypted);
+        assert_eq!(key.passphrase, None);
+        assert_eq!(key.fingerprint, fingerprint(private.public_key()));
+        let plain = generate(KeyKind::Ed25519, "a").unwrap();
+        assert!(!import_found(&plain.private_key, "b").unwrap().encrypted);
     }
 
     #[test]

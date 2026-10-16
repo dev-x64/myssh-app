@@ -6,6 +6,7 @@
 pub mod cloud;
 pub mod error;
 pub mod history;
+pub mod import;
 pub mod keys;
 pub mod keystore;
 pub mod known_hosts;

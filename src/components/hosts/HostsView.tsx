@@ -1,6 +1,7 @@
 import {
   ChevronRight,
   Copy,
+  Download,
   Folder,
   FolderPlus,
   Pencil,
@@ -24,6 +25,7 @@ import { Confirm, ContextMenu, cx, Empty, type MenuEntry } from "../ui";
 import { GroupDialog } from "./GroupDialog";
 import { HostLoad, OnlineDot } from "./HostLoad";
 import { HostPanel } from "./HostPanel";
+import { ImportDialog } from "./ImportDialog";
 import { OsIcon } from "./OsIcon";
 
 const HOST_DRAG = "application/x-myssh-host";
@@ -33,6 +35,7 @@ type Dialog =
   | { kind: "group"; group: Group | null }
   | { kind: "delete-host"; host: HostView }
   | { kind: "delete-group"; group: Group }
+  | { kind: "import" }
   | null;
 
 /** Every word of the query is somewhere in what a host shows. */
@@ -244,6 +247,10 @@ export function HostsView() {
             />
           </div>
           <div className="grow" />
+          <button className="btn" title={t("import.button.hint")} onClick={() => setDialog({ kind: "import" })}>
+            <Download size={15} />
+            {t("import.button")}
+          </button>
           <button className="btn" onClick={() => setDialog({ kind: "group", group: null })}>
             <FolderPlus size={15} />
             {t("hosts.new_group")}
@@ -434,10 +441,18 @@ export function HostsView() {
               }
               action={
                 !searching && (
-                  <button className="btn primary" onClick={() => setPanel({ mode: "new", groupId })}>
-                    <Plus size={15} />
-                    {t("hosts.new")}
-                  </button>
+                  <div className="empty-actions">
+                    <button className="btn primary" onClick={() => setPanel({ mode: "new", groupId })}>
+                      <Plus size={15} />
+                      {t("hosts.new")}
+                    </button>
+                    {nothingAtAll && (
+                      <button className="btn" onClick={() => setDialog({ kind: "import" })}>
+                        <Download size={15} />
+                        {t("import.empty_action")}
+                      </button>
+                    )}
+                  </div>
                 )
               }
             />
@@ -455,6 +470,8 @@ export function HostsView() {
       )}
 
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
+
+      {dialog?.kind === "import" && <ImportDialog onClose={() => setDialog(null)} />}
 
       {dialog?.kind === "group" && (
         <GroupDialog group={dialog.group} parentId={groupId} onClose={() => setDialog(null)} />
