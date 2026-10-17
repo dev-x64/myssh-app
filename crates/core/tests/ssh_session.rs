@@ -1331,9 +1331,17 @@ async fn ports_forwarded_through_the_terminal_connection() {
     let failure = nowhere.status().failure.expect("a failure");
     assert_eq!(failure.code, "refused", "{failure:?}");
 
-    // Closing a forward frees its port and ends what it carried.
+    // Closing a forward frees its port and ends what it carried; it can
+    // be opened again on the same port at once.
     let mut held = held;
     drop(forward);
+    let again = client
+        .handle
+        .forward_local(ForwardTarget { local_port: port, remote_host: "127.0.0.1".into(), remote_port: echo })
+        .await
+        .unwrap();
+    assert_eq!(echo_through(port, b"again").await, b"again");
+    drop(again);
     assert_eq!(timeout(WAIT, held.read(&mut buf)).await.unwrap().unwrap_or(0), 0);
     timeout(WAIT, async {
         while tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {

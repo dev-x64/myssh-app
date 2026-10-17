@@ -138,9 +138,19 @@ impl SessionHandle {
 /// Listens on the loopback addresses: IPv4 always, IPv6 as well where the
 /// system has it, on the same port, since `localhost` may mean either.
 async fn bind(port: u16) -> Result<(Vec<TcpListener>, u16)> {
-    let v4 = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
-        .await
-        .map_err(|e| bind_error(e, port))?;
+    // A forward just closed on this port lets go of it a moment later, as
+    // its listener notices: a port in use is tried again for that long.
+    let mut tries = 0;
+    let v4 = loop {
+        match TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await {
+            Ok(listener) => break listener,
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse && port != 0 && tries < 10 => {
+                tries += 1;
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            Err(e) => return Err(bind_error(e, port)),
+        }
+    };
     let port = v4.local_addr()?.port();
     let mut listeners = vec![v4];
     if let Ok(v6) = TcpListener::bind((Ipv6Addr::LOCALHOST, port)).await {

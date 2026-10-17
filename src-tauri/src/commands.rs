@@ -5,8 +5,8 @@ use myssh_core::keys::{self, KeyKind};
 use myssh_core::known_hosts::KnownHost;
 use myssh_core::model::*;
 use myssh_core::ssh::{
-    self, ConnectParams, InstallParams, KeyParams, PromptReply, Remember, SessionEvent,
-    SessionOutput,
+    self, ConnectParams, ForwardStatus, ForwardTarget, InstallParams, KeyParams, PromptReply,
+    Remember, SessionEvent, SessionOutput,
 };
 use myssh_core::{Error, Result};
 use serde::Serialize;
@@ -172,6 +172,11 @@ pub fn host_move(state: State<'_, AppState>, id: Id, group_id: Option<Id>) -> Re
 #[tauri::command]
 pub fn host_pin(state: State<'_, AppState>, id: Id, pinned: bool) -> Result<HostView> {
     state.with_vault(|v| v.pin_host(id, pinned))
+}
+
+#[tauri::command]
+pub fn host_set_forwards(state: State<'_, AppState>, id: Id, forwards: Vec<PortForwardInput>) -> Result<HostView> {
+    state.with_vault(|v| v.set_host_forwards(id, forwards))
 }
 
 #[tauri::command]
@@ -613,6 +618,35 @@ pub fn session_close(state: State<'_, AppState>, id: u64) {
     } else if let Some(session) = state.remove_session(id) {
         session.close();
     }
+}
+
+/// Opens a port on this computer that leads through a session's
+/// connection. One already open under this id is closed first, so a
+/// changed forward takes the place of the old one.
+#[tauri::command]
+pub async fn forward_start(
+    state: State<'_, AppState>,
+    id: u64,
+    forward_id: Id,
+    target: ForwardTarget,
+) -> Result<ForwardStatus> {
+    let session = state.session(id)?;
+    state.stop_forward(id, forward_id);
+    let forward = session.forward_local(target).await?;
+    let status = forward.status();
+    state.add_forward(id, forward_id, forward)?;
+    Ok(status)
+}
+
+#[tauri::command]
+pub fn forward_stop(state: State<'_, AppState>, id: u64, forward_id: Id) {
+    state.stop_forward(id, forward_id);
+}
+
+/// The forwards open on a session's connection and how they are doing.
+#[tauri::command]
+pub fn forward_status(state: State<'_, AppState>, id: u64) -> std::collections::HashMap<Id, ForwardStatus> {
+    state.forward_status(id)
 }
 
 /// Closes every session. The UI calls this on start-up so a reloaded window

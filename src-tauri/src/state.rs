@@ -8,7 +8,8 @@ use myssh_core::history::History;
 use myssh_core::keystore::FileKeyStore;
 use myssh_core::known_hosts::KnownHosts;
 use myssh_core::sftp::{CancelFlag, Sftp};
-use myssh_core::ssh::SessionHandle;
+use myssh_core::model::Id;
+use myssh_core::ssh::{Forward, ForwardStatus, SessionHandle};
 use myssh_core::vault::Vault;
 use myssh_core::{Error, Result};
 
@@ -24,6 +25,9 @@ pub struct AppState {
     next_session: AtomicU64,
     /// File transfer channels, one per terminal session, opened on demand.
     sftp: Mutex<HashMap<u64, Arc<Sftp>>>,
+    /// Ports forwarded through each session's connection, by forward id.
+    /// They close with the session.
+    forwards: Mutex<HashMap<u64, HashMap<Id, Forward>>>,
     transfers: Mutex<HashMap<u64, CancelFlag>>,
     /// Command history; absent when the vault key is unavailable.
     history: Mutex<Option<History>>,
@@ -103,6 +107,7 @@ impl AppState {
             locals: Mutex::new(HashMap::new()),
             next_session: AtomicU64::new(1),
             sftp: Mutex::new(HashMap::new()),
+            forwards: Mutex::new(HashMap::new()),
             transfers: Mutex::new(HashMap::new()),
         }
     }
@@ -204,11 +209,13 @@ impl AppState {
 
     pub fn remove_session(&self, id: u64) -> Option<Arc<SessionHandle>> {
         self.sftp.lock().unwrap().remove(&id);
+        self.forwards.lock().unwrap().remove(&id);
         self.sessions.lock().unwrap().remove(&id)
     }
 
     pub fn drain_sessions(&self) -> Vec<Arc<SessionHandle>> {
         self.sftp.lock().unwrap().clear();
+        self.forwards.lock().unwrap().clear();
         self.sessions.lock().unwrap().drain().map(|(_, s)| s).collect()
     }
 
@@ -222,6 +229,35 @@ impl AppState {
         self.session(session_id)?;
         let mut channels = self.sftp.lock().unwrap();
         Ok(channels.entry(session_id).or_insert(opened).clone())
+    }
+
+    /// Keeps an open forward with its session. Refused, closing it, when
+    /// the session ended while it was being opened.
+    pub fn add_forward(&self, session_id: u64, forward_id: Id, forward: Forward) -> Result<()> {
+        let sessions = self.sessions.lock().unwrap();
+        if !sessions.contains_key(&session_id) {
+            return Err(Error::SessionClosed);
+        }
+        let mut forwards = self.forwards.lock().unwrap();
+        forwards.entry(session_id).or_default().insert(forward_id, forward);
+        Ok(())
+    }
+
+    /// Closes a forward, freeing its port. Whether it was open.
+    pub fn stop_forward(&self, session_id: u64, forward_id: Id) -> bool {
+        let mut forwards = self.forwards.lock().unwrap();
+        forwards
+            .get_mut(&session_id)
+            .and_then(|open| open.remove(&forward_id))
+            .is_some()
+    }
+
+    pub fn forward_status(&self, session_id: u64) -> HashMap<Id, ForwardStatus> {
+        let forwards = self.forwards.lock().unwrap();
+        forwards
+            .get(&session_id)
+            .map(|open| open.iter().map(|(id, f)| (*id, f.status())).collect())
+            .unwrap_or_default()
     }
 
     /// Forgets a channel that stopped working so the next use reopens it.
