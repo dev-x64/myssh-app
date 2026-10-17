@@ -24,8 +24,8 @@
 #
 # In order:
 #   1. sets the version in Cargo.toml, tauri.conf.json and package.json;
-#   2. builds the app for the Mac and its update archive, signed with the
-#      release key, then the app for Windows, built here on the Mac, and,
+#   2. builds the app for the Mac (one app for both Apple silicon and Intel)
+#      and its update archive, signed with the release key, then the app for Windows, built here on the Mac, and,
 #      when asked, for Linux, in Docker (scripts/linux-build.sh);
 #   3. collects release/<version>/: the archive Macs update from and a .dmg
 #      for first installs, the installer Windows both installs and updates
@@ -108,7 +108,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 KEY="${MYSSH_UPDATER_KEY:-$HOME/.myssh/updater.key}"
-ARCH="aarch64"
+# One Mac app for both kinds of processor: Apple silicon and Intel.
+MAC_TARGET="universal-apple-darwin"
+ARCH="universal"
 TIMES="$HOME/.myssh/release-times"
 
 case "${1:-}" in
@@ -263,6 +265,10 @@ MAKEMSIX="${MYSSH_MAKEMSIX:-$HOME/.myssh/msix/bin/makemsix}"
 SIGNED=""
 [ ! -f "$WIN_CERT" ] || SIGNED="yes"
 WIN_MISSING=()
+# The Mac app is built for Intel too, which takes Rust's Intel library.
+MAC_MISSING=""
+rustup target list --installed 2> /dev/null | grep -x "x86_64-apple-darwin" > /dev/null \
+  || MAC_MISSING="rustup target add x86_64-apple-darwin"
 rustup target list --installed 2> /dev/null | grep -x "$WIN_TARGET" > /dev/null || WIN_MISSING+=("rustup target add $WIN_TARGET")
 command -v cargo-xwin > /dev/null || WIN_MISSING+=("cargo install --locked cargo-xwin")
 for FORMULA in llvm lld nsis nasm cmake; do
@@ -481,6 +487,11 @@ if [ -n "$MENU" ]; then
     fi
   else
     warn "нет сертификата Developer ID: приложение для Mac будет без подписи Apple"
+  fi
+  if [ -z "$MAC_MISSING" ]; then
+    ok "приложение для Mac соберётся и для Apple silicon, и для Intel"
+  else
+    bad "для Intel-маков не хватает: $MAC_MISSING"
   fi
   if [ "${#WIN_MISSING[@]}" -eq 0 ]; then
     ok "инструменты для Windows на месте"
@@ -715,6 +726,7 @@ if [ -z "$MENU" ] && [ -z "$NOTARIZE" ]; then
   fi
 fi
 [ "$GITHUB" != "yes" ] || command -v gh > /dev/null || fail "для выкладки на GitHub нужен GitHub CLI: brew install gh"
+[ -z "$MAC_MISSING" ] || fail "для приложения под Intel-маки сначала: $MAC_MISSING"
 
 if [ "$WINDOWS" = "yes" ]; then
   MISSING=()
@@ -872,10 +884,10 @@ echo "${B}release: сборка для Mac${R} ${D}($(mac_signing))${R}"
 # notarizing asks for; without, the ad hoc signature tauri.conf.json names.
 MAC_SIGN=()
 [ -z "$MAC_IDENTITY" ] || MAC_SIGN=("APPLE_SIGNING_IDENTITY=$MAC_IDENTITY")
-env ${MAC_SIGN[@]+"${MAC_SIGN[@]}"} TAURI_SIGNING_PRIVATE_KEY="$(cat "$KEY")" npx tauri build --bundles app \
+env ${MAC_SIGN[@]+"${MAC_SIGN[@]}"} TAURI_SIGNING_PRIVATE_KEY="$(cat "$KEY")" npx tauri build --target "$MAC_TARGET" --bundles app \
   -c "{\"bundle\":{\"createUpdaterArtifacts\":true},\"plugins\":{\"updater\":{\"pubkey\":\"$PUBKEY\"}}}"
 
-BUNDLE="$BUILD_DIR/release/bundle/macos"
+BUNDLE="$BUILD_DIR/$MAC_TARGET/release/bundle/macos"
 if [ -n "$MAC_IDENTITY" ]; then
   codesign --verify --deep --strict "$BUNDLE/MySSH.app" || fail "подпись приложения для Mac не сходится"
   # Read whole first: grep -q stops reading early, and pipefail would take
@@ -935,8 +947,10 @@ if [ -n "$NOTARIZE" ]; then
 fi
 
 # What each kind of computer updates from: its name to the updater, the
-# file, and the signature made for that file.
+# file, and the signature made for that file. Both kinds of Mac take the
+# one app built for both.
 UPDATES=("darwin-aarch64" "$ARCHIVE" "$BUNDLE/MySSH.app.tar.gz.sig")
+UPDATES+=("darwin-x86_64" "$ARCHIVE" "$BUNDLE/MySSH.app.tar.gz.sig")
 FILES=("$OUT/$ARCHIVE" "$OUT/$DMG")
 
 # Windows: one installer, which is also what an installed copy updates
@@ -1030,7 +1044,7 @@ fi
 # built anew every time. The cache of development builds goes too: it grows
 # to tens of gigabytes and costs only a few minutes to make again. Earlier
 # releases are left where they are.
-rm -rf "${BUILD_DIR:?}/release/bundle" "${BUILD_DIR:?}/debug" dist
+rm -rf "${BUILD_DIR:?}/release/bundle" "${BUILD_DIR:?}/$MAC_TARGET/release/bundle" "${BUILD_DIR:?}/debug" dist
 rm -rf "${BUILD_DIR:?}/$WIN_TARGET/release/bundle" "${BUILD_DIR:?}/$WIN_TARGET/debug" "${BUILD_DIR:?}/linux-bundle"
 find release -name .DS_Store -delete 2> /dev/null || true
 
