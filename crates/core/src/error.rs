@@ -10,6 +10,8 @@ pub enum Error {
     Invalid(String),
     #[error("{0}")]
     InUse(String),
+    #[error("port {0} on this computer is in use")]
+    PortInUse(u16),
     #[error("this key is already in the keychain as \"{0}\"")]
     KeyExists(String),
 
@@ -101,6 +103,7 @@ impl Error {
             Error::NotFound(_) => "not_found",
             Error::Invalid(_) => "invalid",
             Error::InUse(_) => "in_use",
+            Error::PortInUse(_) => "port_in_use",
             Error::KeyExists(_) => "key_exists",
             Error::VaultDecrypt => "vault_decrypt",
             Error::VaultFormat => "vault_format",

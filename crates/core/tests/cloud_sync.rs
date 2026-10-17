@@ -194,6 +194,7 @@ fn host(label: &str) -> HostInput {
             key_id: None,
         },
         startup_snippet_id: None,
+        forwards: None,
     }
 }
 
@@ -219,6 +220,7 @@ fn edited(view: &HostView, change: impl FnOnce(&mut HostInput)) -> HostInput {
             },
         },
         startup_snippet_id: view.startup_snippet_id,
+        forwards: None,
     };
     change(&mut input);
     input

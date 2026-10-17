@@ -200,6 +200,7 @@ impl Vault {
         if port == 0 {
             return Err(Error::Invalid("the port must be between 1 and 65535".into()));
         }
+        let forwards = input.forwards.map(port_forwards).transpose()?;
 
         self.commit(|data| {
             if let Some(group_id) = input.group_id {
@@ -267,6 +268,9 @@ impl Vault {
                 os,
                 // Pinning is not part of the edit form; it stays as it was.
                 pinned: existing.is_some_and(|i| data.hosts[i].pinned),
+                forwards: forwards
+                    .clone()
+                    .unwrap_or_else(|| existing.map(|i| data.hosts[i].forwards.clone()).unwrap_or_default()),
                 created_at: existing.map_or(now, |i| data.hosts[i].created_at),
                 updated_at: now,
             };
@@ -349,6 +353,23 @@ impl Vault {
                 .ok_or(Error::NotFound("host"))?;
             if host.pinned != pinned {
                 host.pinned = pinned;
+                host.updated_at = now_ms();
+            }
+            Ok(HostView::from(&*host))
+        })
+    }
+
+    /// Replaces a host's port forwards.
+    pub fn set_host_forwards(&mut self, host_id: Id, forwards: Vec<PortForwardInput>) -> Result<HostView> {
+        let forwards = port_forwards(forwards)?;
+        self.commit(|data| {
+            let host = data
+                .hosts
+                .iter_mut()
+                .find(|h| h.id == host_id)
+                .ok_or(Error::NotFound("host"))?;
+            if host.forwards != forwards {
+                host.forwards = forwards.clone();
                 host.updated_at = now_ms();
             }
             Ok(HostView::from(&*host))
@@ -974,6 +995,37 @@ impl Vault {
     }
 }
 
+/// Checks port forwards as entered. The address on the server's side
+/// defaults to the server itself; two forwards of one host cannot take the
+/// same port here, as only one of them could be open.
+fn port_forwards(input: Vec<PortForwardInput>) -> Result<Vec<PortForward>> {
+    let mut forwards: Vec<PortForward> = Vec::with_capacity(input.len());
+    for item in input {
+        let remote_host = match item.remote_host.trim() {
+            "" => "localhost".to_string(),
+            host => host.to_string(),
+        };
+        if remote_host.chars().any(char::is_whitespace) {
+            return Err(Error::Invalid("the address must not contain spaces".into()));
+        }
+        if item.local_port == 0 || item.remote_port == 0 {
+            return Err(Error::Invalid("the port must be between 1 and 65535".into()));
+        }
+        if forwards.iter().any(|f| f.local_port == item.local_port) {
+            return Err(Error::Invalid(format!("port {} is forwarded twice", item.local_port)));
+        }
+        forwards.push(PortForward {
+            id: item.id.unwrap_or_else(Uuid::new_v4),
+            label: item.label.trim().to_string(),
+            local_port: item.local_port,
+            remote_host,
+            remote_port: item.remote_port,
+            auto: item.auto,
+        });
+    }
+    Ok(forwards)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1014,7 +1066,67 @@ mod tests {
                 key_id: None,
             },
             startup_snippet_id: None,
+            forwards: None,
         }
+    }
+
+    fn forward(local_port: u16, remote_host: &str, remote_port: u16) -> PortForwardInput {
+        PortForwardInput {
+            id: None,
+            label: String::new(),
+            local_port,
+            remote_host: remote_host.into(),
+            remote_port,
+            auto: false,
+        }
+    }
+
+    #[test]
+    fn port_forwards_are_kept_checked_and_replaced() {
+        let fx = Fixture::new();
+        let mut vault = fx.open().unwrap();
+        let host = vault.save_host(inline_host("db", SecretInput::Keep)).unwrap();
+        assert!(host.forwards.is_empty());
+
+        // The server's side defaults to the server itself.
+        let host = vault
+            .set_host_forwards(host.id, vec![forward(5432, " ", 5432), forward(8080, "10.0.0.5", 80)])
+            .unwrap();
+        assert_eq!(host.forwards.len(), 2);
+        assert_eq!(host.forwards[0].remote_host, "localhost");
+        assert_eq!(host.forwards[1].remote_host, "10.0.0.5");
+        let first = host.forwards[0].id;
+
+        // Editing the host without them leaves them as they are; an id
+        // given back keeps the forward's identity.
+        let edit = HostInput { id: Some(host.id), ..inline_host("db-main", SecretInput::Keep) };
+        assert_eq!(vault.save_host(edit).unwrap().forwards, host.forwards);
+        let mut kept = forward(15432, "localhost", 5432);
+        kept.id = Some(first);
+        let edit = HostInput { id: Some(host.id), forwards: Some(vec![kept]), ..inline_host("db", SecretInput::Keep) };
+        let edited = vault.save_host(edit).unwrap();
+        assert_eq!(edited.forwards.len(), 1);
+        assert_eq!((edited.forwards[0].id, edited.forwards[0].local_port), (first, 15432));
+
+        // Ports out of range, a space in the address, one port twice.
+        for bad in [
+            vec![forward(0, "localhost", 80)],
+            vec![forward(80, "localhost", 0)],
+            vec![forward(80, "two words", 80)],
+            vec![forward(80, "localhost", 80), forward(80, "localhost", 81)],
+        ] {
+            assert!(matches!(vault.set_host_forwards(host.id, bad), Err(Error::Invalid(_))));
+        }
+
+        // They outlive reopening, and a host without any stores none.
+        drop(vault);
+        let vault = fx.open().unwrap();
+        assert_eq!(vault.snapshot().hosts[0].forwards, edited.forwards);
+        let stored = serde_json::to_value(&vault.data.hosts[0]).unwrap();
+        assert!(stored.get("forwards").is_some());
+        let mut bare = vault.data.hosts[0].clone();
+        bare.forwards.clear();
+        assert!(serde_json::to_value(&bare).unwrap().get("forwards").is_none());
     }
 
     #[test]

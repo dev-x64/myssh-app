@@ -93,8 +93,28 @@ pub struct Host {
     /// hosts nobody pinned are stored (and synced) exactly as before.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub pinned: bool,
+    /// Ports of this computer that lead through the host's connection.
+    /// Left out when there are none, as `pinned` is.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub forwards: Vec<PortForward>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+/// A port on this computer that leads, through the host's connection, to
+/// an address as the server sees it: `ssh -L local_port:remote_host:remote_port`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PortForward {
+    pub id: Id,
+    #[serde(default)]
+    pub label: String,
+    pub local_port: u16,
+    /// As the server sees it: `localhost` is the server itself.
+    pub remote_host: String,
+    pub remote_port: u16,
+    /// Opened along with every session to the host.
+    #[serde(default)]
+    pub auto: bool,
 }
 
 /// What a server said about its operating system.
@@ -238,6 +258,7 @@ pub struct HostView {
     pub startup_snippet_id: Option<Id>,
     pub os: Option<HostOs>,
     pub pinned: bool,
+    pub forwards: Vec<PortForward>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -316,6 +337,7 @@ impl From<&Host> for HostView {
             startup_snippet_id: h.startup_snippet_id,
             os: h.os.clone(),
             pinned: h.pinned,
+            forwards: h.forwards.clone(),
             created_at: h.created_at,
             updated_at: h.updated_at,
         }
@@ -397,6 +419,24 @@ pub struct HostInput {
     pub auth: HostAuthInput,
     #[serde(default)]
     pub startup_snippet_id: Option<Id>,
+    /// `None` keeps the forwards the host has.
+    #[serde(default)]
+    pub forwards: Option<Vec<PortForwardInput>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PortForwardInput {
+    /// `None` for a new one.
+    #[serde(default)]
+    pub id: Option<Id>,
+    #[serde(default)]
+    pub label: String,
+    pub local_port: u16,
+    #[serde(default)]
+    pub remote_host: String,
+    pub remote_port: u16,
+    #[serde(default)]
+    pub auto: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

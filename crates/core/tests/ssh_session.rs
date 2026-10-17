@@ -1244,3 +1244,115 @@ async fn key_installation_appends_once_and_proves_the_key() {
     assert_eq!(events, vec!["closed(Failed,Some(\"auth_failed\"))"]);
     assert_eq!(std::fs::read_to_string(&authorized).unwrap(), after);
 }
+
+/// A server on this computer that sends back whatever it is sent.
+async fn echo_server() -> u16 {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else { return };
+            tokio::spawn(async move {
+                let (mut reader, mut writer) = socket.split();
+                let _ = tokio::io::copy(&mut reader, &mut writer).await;
+            });
+        }
+    });
+    port
+}
+
+async fn echo_through(port: u16, text: &[u8]) -> Vec<u8> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut socket = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    socket.write_all(text).await.unwrap();
+    let mut back = vec![0; text.len()];
+    timeout(WAIT, socket.read_exact(&mut back)).await.unwrap().unwrap();
+    back
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ports_forwarded_through_the_terminal_connection() {
+    use myssh_core::ssh::ForwardTarget;
+    use tokio::io::AsyncReadExt;
+
+    let key = keys::generate(KeyKind::Ed25519, "test").unwrap();
+    let Some(server) = Server::start(&[&key]) else {
+        return;
+    };
+    let state = tempfile::tempdir().unwrap();
+    let known = known_hosts(state.path());
+    let mut client = connected(&server, &known, &key).await;
+    let echo = echo_server().await;
+
+    // A port here leads to the echo server as the SSH server sees it.
+    let forward = client
+        .handle
+        .forward_local(ForwardTarget { local_port: 0, remote_host: "127.0.0.1".into(), remote_port: echo })
+        .await
+        .unwrap();
+    let port = forward.local_port();
+    assert_ne!(port, 0);
+    assert_eq!(echo_through(port, b"through the tunnel").await, b"through the tunnel");
+    // Several at once, each its own channel.
+    let (a, b) = tokio::join!(echo_through(port, b"first"), echo_through(port, b"second"));
+    assert_eq!((a.as_slice(), b.as_slice()), (&b"first"[..], &b"second"[..]));
+    let status = forward.status();
+    assert_eq!(status.total, 3);
+    assert!(status.failure.is_none());
+
+    // While a connection is open it is counted.
+    let held = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    timeout(WAIT, async {
+        while forward.status().open != 1 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+
+    // The port is taken: a second forward on it is refused as such.
+    let taken = client
+        .handle
+        .forward_local(ForwardTarget { local_port: port, remote_host: "127.0.0.1".into(), remote_port: echo })
+        .await;
+    assert!(matches!(taken, Err(myssh_core::Error::PortInUse(p)) if p == port), "{taken:?}");
+
+    // Nothing answers on the server's side: the connection is closed and
+    // the forward says why.
+    let dead = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let nowhere = client
+        .handle
+        .forward_local(ForwardTarget { local_port: 0, remote_host: "127.0.0.1".into(), remote_port: dead })
+        .await
+        .unwrap();
+    let mut socket = tokio::net::TcpStream::connect(("127.0.0.1", nowhere.local_port())).await.unwrap();
+    let mut buf = [0u8; 1];
+    assert_eq!(timeout(WAIT, socket.read(&mut buf)).await.unwrap().unwrap_or(0), 0);
+    let failure = nowhere.status().failure.expect("a failure");
+    assert_eq!(failure.code, "refused", "{failure:?}");
+
+    // Closing a forward frees its port and ends what it carried.
+    let mut held = held;
+    drop(forward);
+    assert_eq!(timeout(WAIT, held.read(&mut buf)).await.unwrap().unwrap_or(0), 0);
+    timeout(WAIT, async {
+        while tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+
+    // Once the session is over, nothing can be forwarded through it.
+    client.handle.close();
+    loop {
+        if let SessionEvent::Closed { .. } = client.milestone().await {
+            break;
+        }
+    }
+    let after = client
+        .handle
+        .forward_local(ForwardTarget { local_port: 0, remote_host: "127.0.0.1".into(), remote_port: echo })
+        .await;
+    assert!(matches!(after, Err(myssh_core::Error::SessionClosed)), "{after:?}");
+}

@@ -26,7 +26,9 @@ use crate::model::Id;
 use crate::{Error, Result};
 
 mod archive;
+mod forward;
 mod install;
+pub use forward::{Forward, ForwardFailure, ForwardStatus, ForwardTarget};
 pub use install::{install_comment, install_script, spawn_install, InstallParams};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
