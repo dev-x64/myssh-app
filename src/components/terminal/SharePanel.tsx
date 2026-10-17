@@ -18,6 +18,7 @@ import { useUi, useVault, type Tab } from "../../lib/store";
 import { cx } from "../ui";
 import { GetProButton, ProBadge } from "../cloud/Pro";
 import { personTone } from "./CursorBadge";
+import { ShareDemo } from "./HelpDemos";
 
 /** The guests who have introduced themselves; the ones still joining have no name yet. */
 const present = (share: Share | undefined) => share?.guests.filter((guest) => guest.name) ?? [];
@@ -137,6 +138,7 @@ export function ShareButton({ tab }: { tab: Tab }) {
 
           {!share ? (
             <div className="share-body">
+              <ShareDemo />
               <p>{t("share.intro")}</p>
               {!signedIn ? (
                 <>

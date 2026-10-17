@@ -50,6 +50,7 @@ import {
 } from "../../lib/settings";
 import { useUi, type Tab } from "../../lib/store";
 import { Tip } from "../Tip";
+import { FilesDemo } from "./HelpDemos";
 import { Confirm, ContextMenu, cx, Field, Modal, type MenuEntry } from "../ui";
 
 /** Matches the editor limit enforced by the core. */
@@ -1391,7 +1392,7 @@ export function FileManager({ tab }: { tab: Tab }) {
 
   return (
     <div className="fm" ref={root} tabIndex={-1} onKeyDown={onKeyDown}>
-      <Tip id="files" title={t("tip.files.title")} className="tip-bar">
+      <Tip id="files" title={t("tip.files.title")} className="tip-bar" art={<FilesDemo />}>
         {t("tip.files.text")}
       </Tip>
       <div className="fm-panes">
