@@ -573,6 +573,14 @@ pub fn session_reply(
     state.session(id)?.reply(prompt_id, reply)
 }
 
+/// Whether a session's connection still answers, asked when the network may
+/// have changed under it. One that does not is ended as lost.
+#[tauri::command]
+pub async fn session_check(state: State<'_, AppState>, id: u64) -> Result<bool> {
+    let session = state.session(id)?;
+    session.check(std::time::Duration::from_secs(6)).await
+}
+
 /// The terminal's working directory on the server, when it can be found.
 #[tauri::command]
 pub async fn session_cwd(state: State<'_, AppState>, id: u64) -> Result<Option<String>> {

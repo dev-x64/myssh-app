@@ -1438,3 +1438,94 @@ async fn the_server_signs_in_onwards_with_a_forwarded_key() {
     let screen = String::from_utf8_lossy(&plain.screen).into_owned();
     assert!(screen.contains("authentication agent"), "{screen}");
 }
+
+/// A relay between the client and the server that can go quiet without
+/// closing anything, as a link does when the network drops or a VPN
+/// switches under it.
+async fn freezable_relay(target: u16) -> (u16, Arc<std::sync::atomic::AtomicBool>) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let frozen = Arc::new(AtomicBool::new(false));
+    let flag = frozen.clone();
+    tokio::spawn(async move {
+        let Ok((client, _)) = listener.accept().await else { return };
+        let server = tokio::net::TcpStream::connect(("127.0.0.1", target)).await.unwrap();
+        let (cr, cw) = client.into_split();
+        let (sr, sw) = server.into_split();
+        let pass = |frozen: Arc<AtomicBool>, mut from: tokio::net::tcp::OwnedReadHalf, mut to: tokio::net::tcp::OwnedWriteHalf| async move {
+            let mut buf = vec![0u8; 16384];
+            loop {
+                let Ok(n) = from.read(&mut buf).await else { return };
+                if n == 0 {
+                    return;
+                }
+                // Gone quiet: what arrives is lost, and nothing is closed.
+                if frozen.load(Ordering::Acquire) {
+                    continue;
+                }
+                if to.write_all(&buf[..n]).await.is_err() {
+                    return;
+                }
+            }
+        };
+        tokio::join!(pass(flag.clone(), cr, sw), pass(flag, sr, cw));
+    });
+    (port, frozen)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_link_gone_quiet_is_found_lost_at_once() {
+    let key = keys::generate(KeyKind::Ed25519, "test").unwrap();
+    let Some(server) = Server::start(&[&key]) else {
+        return;
+    };
+    let state = tempfile::tempdir().unwrap();
+    let known = known_hosts(state.path());
+    let (port, frozen) = freezable_relay(server.port).await;
+
+    let (tx, out) = mpsc::unbounded_channel();
+    let params = ConnectParams {
+        host: "127.0.0.1".into(),
+        port,
+        username: std::env::var("USER").unwrap(),
+        password: None,
+        key: Some(key_params(&key)),
+        startup: None,
+        cols: 80,
+        rows: 24,
+        agent: Vec::new(),
+    };
+    let mut client = Client {
+        handle: ssh::spawn(params, known.clone(), tx),
+        out,
+        screen: Vec::new(),
+        log: Vec::new(),
+        agent_used: Vec::new(),
+    };
+    loop {
+        match client.milestone().await {
+            SessionEvent::Prompt { id, .. } => client.handle.reply(id, PromptReply::Accept).unwrap(),
+            SessionEvent::Connected => break,
+            other => panic!("expected Connected, got {other:?}"),
+        }
+    }
+
+    // A live link answers at once.
+    assert!(client.handle.check(Duration::from_secs(3)).await.unwrap());
+
+    // The link goes quiet: the check says so in its time, and the session
+    // ends as lost, for the window to reconnect it.
+    frozen.store(true, std::sync::atomic::Ordering::Release);
+    let started = std::time::Instant::now();
+    assert!(!client.handle.check(Duration::from_secs(2)).await.unwrap());
+    assert!(started.elapsed() < Duration::from_secs(3));
+    loop {
+        if let SessionEvent::Closed { reason, .. } = client.milestone().await {
+            assert_eq!(reason, CloseReason::Lost);
+            break;
+        }
+    }
+    assert!(started.elapsed() < Duration::from_secs(6), "{:?}", started.elapsed());
+}

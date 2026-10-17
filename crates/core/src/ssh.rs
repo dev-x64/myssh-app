@@ -34,7 +34,13 @@ pub use install::{install_comment, install_script, spawn_install, InstallParams}
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const SHELL_TIMEOUT: Duration = Duration::from_secs(20);
-const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
+/// A connection whose server says nothing is asked after this long, and
+/// given up after two questions go unanswered: a dead link (the network
+/// gone, a VPN switched) is noticed within about half a minute.
+const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(15);
+const KEEPALIVE_MAX: usize = 2;
+/// How long saying goodbye to a server may take; a dead link never answers.
+const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_SECRET_ATTEMPTS: u32 = 3;
 /// Output not yet consumed by the terminal above which reading pauses, so a
 /// flood of output cannot pile up in memory and Ctrl+C stays responsive.
@@ -253,6 +259,8 @@ enum Command {
     Write(Vec<u8>),
     Resize(u32, u32),
     Close,
+    /// The connection did not answer: end it as lost, to be reconnected.
+    Lost,
 }
 
 struct Shared {
@@ -494,6 +502,22 @@ impl SessionHandle {
 
     pub fn close(&self) {
         let _ = self.send(Command::Close);
+    }
+
+    /// Asks the server whether the connection is still alive, and waits at
+    /// most `limit` for the answer. Without one the session ends as lost
+    /// (and the UI reconnects); `Ok(false)` says so. For when the network
+    /// may have changed under the session: back online, a VPN switched,
+    /// the computer woken up.
+    pub async fn check(&self, limit: Duration) -> Result<bool> {
+        let connection = self.connection()?;
+        match timeout(limit, connection.send_ping()).await {
+            Ok(Ok(())) => Ok(true),
+            _ => {
+                let _ = self.send(Command::Lost);
+                Ok(false)
+            }
+        }
     }
 
     /// Answers a pending [`Prompt`].
@@ -751,7 +775,7 @@ async fn drive(
                 command = commands.recv() => match command {
                     None | Some(Command::Close) => return Err(Error::Cancelled),
                     Some(Command::Resize(cols, rows)) => size = (cols, rows),
-                    Some(Command::Write(_)) => {}
+                    Some(Command::Write(_)) | Some(Command::Lost) => {}
                 },
             }
         }
@@ -775,9 +799,7 @@ async fn drive(
     io.event(SessionEvent::Connected);
     let ended = pump(&mut channel, io, commands, params.startup.as_deref().map(typed)).await;
     *io.shared.connection.lock().unwrap() = None;
-    let _ = handle
-        .disconnect(Disconnect::ByApplication, "", "en")
-        .await;
+    let _ = timeout(DISCONNECT_TIMEOUT, handle.disconnect(Disconnect::ByApplication, "", "en")).await;
     ended
 }
 
@@ -857,7 +879,7 @@ async fn open_transport(
             env!("CARGO_PKG_VERSION")
         ))),
         keepalive_interval: Some(KEEPALIVE_INTERVAL),
-        keepalive_max: 3,
+        keepalive_max: KEEPALIVE_MAX,
         ..Default::default()
     });
     let handler = Handler {
@@ -1288,6 +1310,7 @@ async fn pump(
             }
             command = commands.recv() => match command {
                 None | Some(Command::Close) => return Ok(Ended::ByUser),
+                Some(Command::Lost) => return Ok(Ended::Lost),
                 Some(Command::Write(data)) => channel.data(&data[..]).await?,
                 Some(Command::Resize(cols, rows)) => {
                     channel.window_change(cols.max(1), rows.max(1), 0, 0).await?

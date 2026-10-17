@@ -117,6 +117,7 @@ pub fn run() {
             local::local_terminal,
             commands::session_close,
             commands::session_close_all,
+            commands::session_check,
             commands::forward_start,
             commands::forward_stop,
             commands::forward_status,
