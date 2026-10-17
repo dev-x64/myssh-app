@@ -2,8 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
+  ArrowRightToLine,
   Cable,
+  Copy,
   FolderOpen,
+  Pencil,
+  RotateCw,
+  Settings2,
+  SquareX,
   KeyRound,
   LayoutGrid,
   Plus,
@@ -29,7 +35,7 @@ import { SnippetsView } from "./components/snippets/SnippetsView";
 import { ForwardsView } from "./components/forwards/ForwardsView";
 import { RunGroupList } from "./components/terminal/RunGroup";
 import { TerminalPane } from "./components/terminal/TerminalPane";
-import { cx, Toasts } from "./components/ui";
+import { ContextMenu, cx, Field, Modal, Toasts, type MenuEntry } from "./components/ui";
 import { api } from "./lib/api";
 import { startCloud } from "./lib/cloud";
 import { startPlan } from "./lib/plan";
@@ -45,10 +51,10 @@ import { MenuEntryOffer } from "./components/MenuEntry";
 import { ChangeEmailDialog, openEmailDialog } from "./components/cloud/ChangeEmail";
 import { WindowControls } from "./components/WindowControls";
 import { VaultError } from "./components/VaultError";
-import { getSession, openLocal, requestCloseEditor, requestCloseTab, startSessionSync } from "./lib/sessions";
+import { getSession, openHost, openLocal, requestCloseEditor, requestCloseTab, startSessionSync } from "./lib/sessions";
 import { MAC, WINDOWS } from "./lib/platform";
 import { ACCENT_COLOR, isDark, onSystemThemeChange, useSettings } from "./lib/settings";
-import { isLocalTab, useUi, useVault, type View } from "./lib/store";
+import { isLocalTab, useUi, useVault, type Tab, type View } from "./lib/store";
 
 const NAV: { view: View; label: MessageKey; icon: typeof Server }[] = [
   { view: "hosts", label: "nav.hosts", icon: Server },
@@ -234,6 +240,40 @@ function useFullscreen(): boolean {
   return fullscreen;
 }
 
+/** A tab's name, changed: for telling apart two terminals on one host. */
+function RenameTab(props: { tab: Tab; onDone: (title: string | null) => void }) {
+  const t = useT();
+  const [title, setTitle] = useState(props.tab.title);
+  return (
+    <Modal
+      title={t("tab.rename.title")}
+      onClose={() => props.onDone(null)}
+      onSubmit={() => props.onDone(title.trim() || null)}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={() => props.onDone(null)}>
+            {t("common.cancel")}
+          </button>
+          <button type="submit" className="btn primary" disabled={!title.trim()}>
+            {t("common.rename")}
+          </button>
+        </>
+      }
+    >
+      <Field label={t("tab.rename.label")}>
+        <input
+          className="input"
+          data-autofocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          spellCheck={false}
+        />
+      </Field>
+    </Modal>
+  );
+}
+
 function TitleBar() {
   const t = useT();
   const tabs = useUi((s) => s.tabs);
@@ -247,6 +287,47 @@ function TitleBar() {
   const activeTab = tabs.find((tab) => tab.id === active);
   const groupFocus = useUi((s) => s.groupFocus);
   const fullscreen = useFullscreen();
+  const [menu, setMenu] = useState<{ x: number; y: number; entries: MenuEntry[] } | null>(null);
+  const [renaming, setRenaming] = useState<Tab | null>(null);
+
+  // A right click on a tab: what can be done with it, and with the others.
+  const tabMenu = (e: React.MouseEvent, tab: Tab) => {
+    e.preventDefault();
+    const local = isLocalTab(tab);
+    const plain = tabs.filter((other) => !other.group);
+    const after = plain.slice(plain.findIndex((other) => other.id === tab.id) + 1);
+    const others = plain.filter((other) => other.id !== tab.id);
+    const entries: MenuEntry[] = [
+      {
+        label: t("tab.duplicate"),
+        icon: <Copy size={14} />,
+        onSelect: () => (local ? openLocal() : void openHost(tab.hostId)),
+      },
+      { label: t("tab.rename"), icon: <Pencil size={14} />, onSelect: () => setRenaming(tab) },
+    ];
+    if (tab.status === "closed" && !local) {
+      entries.push({ label: t("tab.reconnect"), icon: <RotateCw size={14} />, onSelect: () => getSession(tab.id)?.reconnect() });
+    }
+    if (!local) {
+      entries.push({
+        label: t("tab.edit_host"),
+        icon: <Settings2 size={14} />,
+        onSelect: () => {
+          const ui = useUi.getState();
+          ui.goHome("hosts");
+          ui.setHostPanel({ mode: "edit", hostId: tab.hostId, tabId: tab.id });
+        },
+      });
+    }
+    entries.push({ label: t("tab.close"), icon: <X size={14} />, separatorBefore: true, onSelect: () => requestCloseTab(tab.id) });
+    if (others.length > 0) {
+      entries.push({ label: t("tab.close_others"), icon: <SquareX size={14} />, onSelect: () => others.forEach((other) => requestCloseTab(other.id)) });
+    }
+    if (after.length > 0) {
+      entries.push({ label: t("tab.close_right"), icon: <ArrowRightToLine size={14} />, onSelect: () => after.forEach((other) => requestCloseTab(other.id)) });
+    }
+    setMenu({ x: e.clientX, y: e.clientY, entries });
+  };
 
   return (
     <header className={cx("titlebar", fullscreen && "fullscreen")} data-tauri-drag-region>
@@ -314,6 +395,7 @@ function TitleBar() {
             onAuxClick={(e) => {
               if (e.button === 1) requestCloseTab(tab.id);
             }}
+            onContextMenu={(e) => tabMenu(e, tab)}
           >
             <span className={cx("dot", tab.status)} />
             <span className="tab-title">{tab.title}</span>
@@ -417,6 +499,16 @@ function TitleBar() {
           {!isLocalTab(activeTab) && <ForwardsButton tab={activeTab} />}
           {!isLocalTab(activeTab) && <ShareButton tab={activeTab} />}
         </div>
+      )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menu.entries} onClose={() => setMenu(null)} />}
+      {renaming && (
+        <RenameTab
+          tab={renaming}
+          onDone={(title) => {
+            if (title) patchTab(renaming.id, { title });
+            setRenaming(null);
+          }}
+        />
       )}
       <UpdateButton />
       <UpdateNotice />
