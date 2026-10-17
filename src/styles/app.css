@@ -7697,3 +7697,124 @@ html[data-theme="light"] .welcome-glow i:last-child {
     animation: none;
   }
 }
+
+/* -------------------------------------------------- signing in with a key --- */
+
+/* 6 s: the public half goes to the server (0–30%), the server keeps it
+   (30–60%), then a signature goes from this Mac and the server lets it in
+   (60–95%). Laid out as the server key's drawing, the other way round. */
+.kl-demo {
+  margin-bottom: 4px;
+}
+
+.kl-public {
+  animation-name: kl-travel;
+}
+
+.kl-mac {
+  color: var(--accent);
+}
+
+.kl-server {
+  animation: kl-keep 6s ease-in-out infinite;
+}
+
+.kl-in {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--bg-0);
+  color: var(--ok);
+  opacity: 0;
+  animation: kl-ok 6s ease-in-out infinite;
+}
+
+.kl-sign {
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  opacity: 0;
+  animation: kl-sign 6s ease-in-out infinite;
+}
+
+@keyframes kl-travel {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  5%,
+  25% {
+    opacity: 1;
+  }
+  30%,
+  100% {
+    left: calc(100% - 80px);
+    opacity: 0;
+  }
+}
+
+@keyframes kl-keep {
+  0%,
+  28%,
+  58%,
+  100% {
+    box-shadow: none;
+    color: var(--text-2);
+  }
+  34%,
+  52% {
+    box-shadow: 0 0 0 4px var(--accent-soft), 0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
+    color: var(--accent);
+  }
+}
+
+@keyframes kl-sign {
+  0%,
+  62% {
+    left: 0;
+    opacity: 0;
+  }
+  65%,
+  84% {
+    opacity: 1;
+  }
+  88%,
+  100% {
+    left: calc(100% - 10px);
+    opacity: 0;
+  }
+}
+
+@keyframes kl-ok {
+  0%,
+  86% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  90%,
+  97% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kl-server,
+  .kl-in,
+  .kl-sign {
+    animation: none;
+  }
+  .kl-in {
+    opacity: 1;
+  }
+}

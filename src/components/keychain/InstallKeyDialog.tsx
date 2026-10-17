@@ -16,6 +16,7 @@ import { errorText, useT, type MessageKey } from "../../lib/i18n";
 import { hostSubtitle, hostTitle, useVault } from "../../lib/store";
 import { PromptDialog } from "../terminal/PromptDialog";
 import { cx, Modal } from "../ui";
+import { KeyLoginHelp, keyLoginHelpSeen } from "./KeyLoginHelp";
 
 /** What happened on one host. Each host gets its own, independent result. */
 interface Row {
@@ -144,6 +145,7 @@ export function InstallKeyDialog(props: { keyView: KeyView; onClose: () => void 
     });
 
   const start = async () => {
+    keyLoginHelpSeen();
     const targets = snapshot.hosts.filter((host) => chosen.has(host.id));
     if (targets.length === 0) return;
     stopped.current = false;
@@ -264,6 +266,7 @@ export function InstallKeyDialog(props: { keyView: KeyView; onClose: () => void 
           </div>
         ) : (
           <>
+            <KeyLoginHelp />
             <p>{t("install.text")}</p>
             {snapshot.hosts.length === 0 ? (
               <p>{t("install.none")}</p>
