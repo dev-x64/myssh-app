@@ -4390,6 +4390,48 @@ html[data-theme="light"] .welcome-glow i:last-child {
   color: var(--ok);
 }
 
+/* Open and Stop are what the section is for: always there, beside the text, not over it. */
+.fwd-card .card-actions {
+  position: static;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 0;
+  transform: none;
+  background: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.fwd-card .card-actions .icon {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.fwd-card:hover .card-actions .icon,
+.fwd-card:focus-within .card-actions .icon {
+  opacity: 1;
+}
+
+.fwd-card .card-main {
+  min-width: 0;
+}
+
+.fwd-card .card-title,
+.fwd-card .card-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The route is the point of the card: it wraps rather than being cut. */
+.fwd-card .card-sub.fwd-route {
+  flex-wrap: wrap;
+  row-gap: 0;
+  white-space: normal;
+}
+
 .fwd-card .card-title .chip {
   margin-left: 6px;
 }
@@ -4420,10 +4462,12 @@ html[data-theme="light"] .welcome-glow i:last-child {
 }
 
 .fwd-diagram {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 18px 8px 16px;
+  gap: 6px;
+  overflow: hidden;
+  padding: 20px 10px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-l);
   background: var(--bg-1);
@@ -4431,7 +4475,7 @@ html[data-theme="light"] .welcome-glow i:last-child {
 
 .fwd-node {
   display: flex;
-  flex: 1;
+  flex: 0 1 76px;
   flex-direction: column;
   align-items: center;
   gap: 4px;
@@ -4466,7 +4510,8 @@ html[data-theme="light"] .welcome-glow i:last-child {
 
 .fwd-link {
   position: relative;
-  flex: 0 0 30px;
+  flex: 1 1 0;
+  min-width: 34px;
   height: 2px;
   margin-bottom: 26px;
   border-radius: 2px;
@@ -4639,6 +4684,16 @@ html[data-theme="light"] .welcome-glow i:last-child {
 
 .fwd-host-button > svg {
   color: var(--text-3);
+}
+
+.fwd-host-button.unset {
+  border-style: dashed;
+  border-color: var(--accent-line);
+}
+
+.fwd-host-button.unset .card-icon,
+.fwd-host-button.unset b {
+  color: var(--accent);
 }
 
 .fwd-host-button .card-icon,

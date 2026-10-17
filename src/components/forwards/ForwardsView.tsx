@@ -289,7 +289,10 @@ const portOf = (text: string): number | null => {
 function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries: Entry[]; onClose: () => void }) {
   const t = useT();
   const f = props.entry?.forward;
-  const [hostId, setHostId] = useState<Id | null>(props.entry?.host.id ?? props.hosts[0]?.id ?? null);
+  // A new forward names no host until one is picked, unless there is only one.
+  const [hostId, setHostId] = useState<Id | null>(
+    props.entry?.host.id ?? (props.hosts.length === 1 ? props.hosts[0].id : null),
+  );
   const [label, setLabel] = useState(f?.label ?? "");
   const [remoteHost, setRemoteHost] = useState(f?.remote_host ?? "localhost");
   const [remotePort, setRemotePort] = useState(f ? String(f.remote_port) : "");
@@ -299,7 +302,7 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
   const [auto, setAuto] = useState(f?.auto ?? false);
   const [busy, setBusy] = useState(false);
   // Choosing the host takes the whole panel, as a list to search.
-  const [picking, setPicking] = useState(props.entry === null && props.hosts.length > 1);
+  const [picking, setPicking] = useState(false);
   const snapshot = useVault((s) => s.snapshot);
 
   const host = props.hosts.find((h) => h.id === hostId);
@@ -389,7 +392,7 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
         <HostPicker
           hosts={props.hosts}
           current={hostId}
-          onBack={host ? () => setPicking(false) : props.onClose}
+          onBack={() => setPicking(false)}
           onPick={(id) => {
             setHostId(id);
             setPicking(false);
@@ -429,12 +432,14 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
           </div>
         </div>
         <p className="fwd-explain">
-          {t("fwd.explain", { local: String(shownLocal), host: host ? hostTitle(host) : "…", target: shownTarget })}
+          {host && remote !== null && local !== null
+            ? t("fwd.explain", { local: String(local), host: hostTitle(host), target: shownTarget })
+            : t("fwd.explain.pending")}
         </p>
 
         <div className="field">
           <label>{t("fwd.host")}</label>
-          <button type="button" className="fwd-host-button" onClick={() => setPicking(true)}>
+          <button type="button" className={cx("fwd-host-button", !host && "unset")} onClick={() => setPicking(true)}>
             {host ? (
               <>
                 <span className="card-icon">
@@ -446,7 +451,15 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
                 </span>
               </>
             ) : (
-              <span className="fwd-host-text dim">{t("fwd.host.pick")}</span>
+              <>
+                <span className="card-icon">
+                  <Server size={17} />
+                </span>
+                <span className="fwd-host-text">
+                  <b>{t("fwd.host.pick")}</b>
+                  <span>{t("fwd.host.pick_hint")}</span>
+                </span>
+              </>
             )}
             <ChevronRight size={15} />
           </button>
