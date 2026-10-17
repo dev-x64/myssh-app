@@ -4,6 +4,8 @@ leaves it in release/<version>/, with the token made for that on the
 panel's settings page ("Выпуски" tab).
 
     scripts/release-upload.py <server> <folder>
+    scripts/release-upload.py --check <server>
+
 
 The token is MYSSH_PANEL_TOKEN, or else the contents of
 ~/.myssh/panel-token. Each file goes up in parts of 8 MB (Cloudflare, in
@@ -12,6 +14,10 @@ tried again from where the server says the file stands, and then the
 server is told to take them all as one release. It is uploaded, not sent:
 the address of the page to look it over and send it from is what it
 prints (progress goes to stderr).
+
+--check only asks the server whether it takes the token: 0 it does, 1 it
+does not, 3 the server could not say (not reached, or not yet updated to
+take tokens).
 """
 
 import json
@@ -26,6 +32,17 @@ from pathlib import Path
 
 PART = 8 * 1024 * 1024
 TRIES = 4
+
+
+class Stay(urllib.request.HTTPRedirectHandler):
+    """Redirects are not followed: a server that sends the script to the
+    panel's sign-in page has not taken its token."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+OPEN = urllib.request.build_opener(Stay())
 
 
 def token() -> str:
@@ -44,7 +61,7 @@ def ask(server: str, path: str, body: bytes, kind: str, key: str) -> tuple[int, 
         headers={"Authorization": f"Bearer {key}", "Content-Type": kind, "User-Agent": "MySSH-release"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=300) as answer:
+        with OPEN.open(request, timeout=300) as answer:
             return answer.status, json.loads(answer.read() or b"{}")
     except urllib.error.HTTPError as error:
         try:
@@ -61,22 +78,41 @@ def size(count: float) -> str:
     return f"{count / 1048576:.1f} МБ"
 
 
+def let_in(server: str, stage: str, key: str) -> int:
+    """An empty part: whether the server takes the token, before it is sent
+    parts it would not read (and its refusal is then readable). 0, 1 or 3,
+    as for --check."""
+    query = urllib.parse.urlencode({"stage": stage, "name": "latest.json", "offset": 0})
+    status, said = ask(server, f"/admin/updates/stage?{query}", b"", "application/octet-stream", key)
+    if status == 200:
+        return 0
+    if status == 401:
+        print(f"панель не пускает: {said.get('error') or 'токен не подходит'}", file=sys.stderr)
+        return 1
+    why = (
+        said.get("error")
+        if status == 0
+        else "сервер ещё не умеет принимать выпуски по токену — его надо обновить"
+        if status in (302, 303, 307, 404)
+        else f"сервер ответил {status}"
+    )
+    print(f"токен не проверить: {why}", file=sys.stderr)
+    return 3
+
+
 def main() -> int:
-    server, folder = sys.argv[1].rstrip("/"), Path(sys.argv[2])
+    check = sys.argv[1:2] == ["--check"]
+    arguments = sys.argv[2:] if check else sys.argv[1:]
+    server = arguments[0].rstrip("/")
     key = token()
     if not key:
         print("нет токена панели (MYSSH_PANEL_TOKEN или ~/.myssh/panel-token)", file=sys.stderr)
         return 2
-    files = sorted(p for p in folder.iterdir() if p.is_file() and not p.name.startswith("."))
-    total = sum(p.stat().st_size for p in files)
     stage = secrets.token_hex(16)
-    # An empty part first: a token that does not fit is refused before the
-    # server has a part it would not read (and the refusal is then readable).
-    query = urllib.parse.urlencode({"stage": stage, "name": "latest.json", "offset": 0})
-    status, said = ask(server, f"/admin/updates/stage?{query}", b"", "application/octet-stream", key)
-    if status != 200:
-        print(f"панель не пускает: {said.get('error') or f'ответ {status}'}", file=sys.stderr)
-        return 1
+    if (refused := let_in(server, stage, key)) or check:
+        return refused
+    files = sorted(p for p in Path(arguments[1]).iterdir() if p.is_file() and not p.name.startswith("."))
+    total = sum(p.stat().st_size for p in files)
     done = 0
     for file in files:
         length, offset = file.stat().st_size, 0

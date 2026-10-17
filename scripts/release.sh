@@ -118,8 +118,10 @@ MAC_TARGET="universal-apple-darwin"
 ARCH="universal"
 TIMES="$HOME/.myssh/release-times"
 # The panel's token for uploading a release: with it, this script uploads.
+# The menu takes it pasted in and keeps it here.
+PANEL_TOKEN_FILE="$HOME/.myssh/panel-token"
 PANEL_TOKEN=""
-[ -z "${MYSSH_PANEL_TOKEN:-}" ] && [ ! -s "$HOME/.myssh/panel-token" ] || PANEL_TOKEN="yes"
+[ -z "${MYSSH_PANEL_TOKEN:-}" ] && [ ! -s "$PANEL_TOKEN_FILE" ] || PANEL_TOKEN="yes"
 
 case "${1:-}" in
   -h | --help)
@@ -312,6 +314,37 @@ mac_signing() {
 }
 notary_setup() {
   echo "xcrun notarytool store-credentials $NOTARY --apple-id <твой Apple ID> --team-id ${TEAM_ID:-<team ID>}"
+}
+
+# Asks for the panel's token, pasted in (nothing shows), has the server
+# check it and keeps it in $PANEL_TOKEN_FILE, for this run and the next.
+# Fails when none was given, or none the server takes.
+paste_panel_token() {
+  local token checked
+  echo "  ${D}Токен делается на панели: $SERVER/admin/settings?tab=releases → «Создать токен».${R}"
+  for _ in 1 2 3; do
+    read -r -s -p "  Вставь токен панели (при вставке не виден; Enter — отмена): " token; echo
+    token="$(tr -d '[:space:]' <<< "$token")"
+    [ -n "$token" ] || return 1
+    checked=0
+    MYSSH_PANEL_TOKEN="$token" python3 -B scripts/release-upload.py --check "$SERVER" || checked=$?
+    if [ "$checked" -eq 1 ]; then
+      echo "  ${Y}Этот токен панель не принимает.${R} Скопируй его заново или создай новый." >&2
+      continue
+    fi
+    mkdir -p "$(dirname "$PANEL_TOKEN_FILE")"
+    (umask 077 && printf '%s\n' "$token" > "$PANEL_TOKEN_FILE")
+    chmod 600 "$PANEL_TOKEN_FILE"
+    export MYSSH_PANEL_TOKEN="$token"
+    PANEL_TOKEN="yes"
+    if [ "$checked" -eq 0 ]; then
+      ok "токен подошёл; сохранён в $PANEL_TOKEN_FILE"
+    else
+      warn "токен сохранён в $PANEL_TOKEN_FILE, но сервер его не проверил (см. выше)"
+    fi
+    return 0
+  done
+  return 1
 }
 
 LAST_TAG="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2> /dev/null || true)"
@@ -514,7 +547,7 @@ if [ -n "$MENU" ]; then
   if [ -n "$PANEL_TOKEN" ]; then
     ok "токен панели на месте: собранное загрузится на панель само"
   else
-    warn "нет токена панели: файлы придётся загружать вручную (токен — на панели: Настройки → Выпуски → в ~/.myssh/panel-token)"
+    warn "нет токена панели: файлы придётся загружать вручную (вставить его можно в меню перед сборкой)"
   fi
   if [ -n "$SIGNED" ]; then
     ok "сертификат для Windows на месте"
@@ -686,7 +719,7 @@ PY
 
   # ----------------------------------------------------------- summary ---
   while :; do
-    SYSTEMS="Mac (Apple Silicon, $(mac_signing))"
+    SYSTEMS="Mac (Apple silicon и Intel, $(mac_signing))"
     if [ "$WINDOWS" = "yes" ]; then
       SYSTEMS="$SYSTEMS, Windows (x64$([ -n "$SIGNED" ] && echo ", подписанный" || echo ", без подписи"))"
       [ "$STORE_TOO" != "yes" ] || SYSTEMS="$SYSTEMS, Microsoft Store"
@@ -698,6 +731,7 @@ PY
     echo "  Версия    $CURRENT → ${B}$VERSION${R}"
     echo "  Системы   $SYSTEMS"
     echo "  Заметки   $(notes_preview)"
+    echo "  Панель    $([ -n "$PANEL_TOKEN" ] && echo "загрузить туда самому, отправить — тебе" || echo "${D}загрузить вручную: токена нет${R}")"
     echo "  GitHub    $([ "$GITHUB" = "yes" ] && echo "выложить и туда (github.com/$REPO)" || echo "${D}нет${R}")"
     [ -z "$BEFORE" ] || echo "  Займёт    ${D}около $(minutes "$BEFORE"), как в прошлый раз${R}"
     choose "Собрать?" 0 \
@@ -706,6 +740,7 @@ PY
       "Изменить системы" \
       "Изменить заметки" \
       "Выложить и на GitHub: $([ "$GITHUB" = "yes" ] && echo да || echo нет)  ${D}только для старых тестовых сборок${R}" \
+      "$([ -n "$PANEL_TOKEN" ] && echo "Заменить токен панели" || echo "Вставить токен панели  ${D}чтобы загрузить самому${R}")" \
       "Отмена"
     case "$CHOICE" in
       0) break ;;
@@ -713,7 +748,8 @@ PY
       2) pick_systems ;;
       3) pick_notes ;;
       4) if [ "$GITHUB" = "yes" ]; then GITHUB="no"; else GITHUB="yes"; fi ;;
-      5) fail "отменено" ;;
+      5) paste_panel_token || true ;;
+      6) fail "отменено" ;;
     esac
   done
   echo
@@ -1076,7 +1112,7 @@ echo "Коммит «Release ${VERSION}» и тег v$VERSION — только �
 
 # Uploaded, not sent: that is for the owner, on the page it names.
 LOOK_OVER=""
-if [ -n "$PANEL_TOKEN" ]; then
+upload_release() {
   echo
   echo "${B}release: загрузка на панель${R} ${D}($SERVER)${R}"
   if LOOK_OVER="$(python3 -B scripts/release-upload.py "$SERVER" "$OUT")"; then
@@ -1085,7 +1121,8 @@ if [ -n "$PANEL_TOKEN" ]; then
     LOOK_OVER=""
     echo "  ${Y}!${R} не загрузилось — загрузи файлы вручную на $SERVER/admin/updates" >&2
   fi
-fi
+}
+[ -z "$PANEL_TOKEN" ] || upload_release
 notify "MySSH $VERSION собрана"
 
 if [ -z "$MENU" ]; then
@@ -1100,21 +1137,34 @@ if [ -z "$MENU" ]; then
 fi
 
 # ------------------------------------------------------- what comes next ---
+# What the menu offers for the panel, as things stand: uploaded or not.
+panel_items() {
+  if [ -n "$LOOK_OVER" ]; then
+    PANEL="Проверить и отправить на панели  ${D}$LOOK_OVER${R}"
+    FINDER="Показать файлы в Finder"
+    UPLOAD="${G}✓${R} Загружено на панель"
+  else
+    PANEL="Открыть панель обновлений  ${D}$SERVER/admin/updates${R}"
+    FINDER="Показать файлы в Finder  ${D}их и нужно загрузить${R}"
+    if [ -n "$PANEL_TOKEN" ]; then
+      UPLOAD="Загрузить на панель ещё раз"
+    else
+      UPLOAD="Вставить токен панели и загрузить  ${D}вместо загрузки вручную${R}"
+    fi
+  fi
+}
 echo
 if [ -n "$LOOK_OVER" ]; then
   echo "${B}Что осталось:${R} проверить $VERSION на панели и нажать «Отправить» —"
-  PANEL="Проверить и отправить на панели  ${D}$LOOK_OVER${R}"
-  FINDER="Показать файлы в Finder"
 else
   echo "${B}Что осталось:${R} загрузить файлы на панели ($SERVER/admin/updates) и сделать $VERSION текущей —"
-  PANEL="Открыть панель обновлений  ${D}$SERVER/admin/updates${R}"
-  FINDER="Показать файлы в Finder  ${D}их и нужно загрузить${R}"
 fi
 echo "тогда установленные копии предложат обновиться."
 [ -z "$STORE" ] || echo "Для Microsoft Store: отправить $STORE в Partner Center."
+panel_items
 PUSH="Отправить в GitHub  ${D}git push и тег v$VERSION${R}"
 while :; do
-  choose "Что дальше?" 0 "$PANEL" "$FINDER" "$PUSH" "Выйти"
+  choose "Что дальше?" 0 "$PANEL" "$FINDER" "$PUSH" "$UPLOAD" "Выйти"
   case "$CHOICE" in
     0)
       open "${LOOK_OVER:-$SERVER/admin/updates}" || true
@@ -1132,6 +1182,21 @@ while :; do
         echo "  ${RD}✗${R} не получилось; можно попробовать ещё раз"
       fi
       ;;
-    3) break ;;
+    3)
+      if [ -z "$LOOK_OVER" ]; then
+        # A kept token the panel no longer takes is asked for anew.
+        CHECKED=0
+        [ -z "$PANEL_TOKEN" ] || python3 -B scripts/release-upload.py --check "$SERVER" 2> /dev/null || CHECKED=$?
+        if [ "$CHECKED" -eq 1 ]; then
+          echo "  ${Y}Сохранённый токен панель больше не принимает.${R}"
+          PANEL_TOKEN=""
+        fi
+        if [ -n "$PANEL_TOKEN" ] || paste_panel_token; then
+          upload_release
+          panel_items
+        fi
+      fi
+      ;;
+    4) break ;;
   esac
 done
