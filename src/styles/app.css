@@ -7300,3 +7300,106 @@ html[data-theme="light"] .welcome-glow i:last-child {
 .run-foot .btn.primary {
   height: 38px;
 }
+
+/* ------------------------------------------------------ tips for newcomers --- */
+
+/* A short note where it is first needed, with a way to put it, or all of
+   them, away. It rises into place rather than appearing at once. */
+.tip {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 14px;
+  padding: 12px 38px 12px 13px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-l);
+  background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--bg-2);
+  animation: tip-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tip-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tip-body b {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.tip-text {
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.tip-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.tip-actions .link-button {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.tip-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+/* Over the terminal: in a corner, out of the way of the prompt. */
+.tip.tip-float {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 30;
+  width: min(420px, calc(100% - 36px));
+  margin: 0;
+  box-shadow: var(--shadow);
+}
+
+/* Above the two panes of the file manager. */
+.tip.tip-bar {
+  margin: 10px 12px 0;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.setting-tips {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip {
+    animation: none;
+  }
+}

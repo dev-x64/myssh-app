@@ -9,6 +9,7 @@ import { openHost } from "../../lib/sessions";
 import { groupOptions, HostPanel } from "../hosts/HostPanel";
 import { OsIcon } from "../hosts/OsIcon";
 import { compareHosts, hostSubtitle, hostTitle, useUi, useVault, type Tab } from "../../lib/store";
+import { Tip } from "../Tip";
 import { cx, Empty } from "../ui";
 
 /** How often the page asks how the open forwards are doing. */
@@ -135,6 +136,11 @@ export function ForwardsView() {
         </div>
 
         <div className="page-body scroll">
+          {entries.length > 0 && (
+            <Tip id="forwards" title={t("tip.forwards.title")}>
+              {t("tip.forwards.text")}
+            </Tip>
+          )}
           {shown.length > 0 && (
             <>
               <div className="section-title">

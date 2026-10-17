@@ -125,6 +125,10 @@ export interface Settings {
   statsTiles: boolean;
   /** Advanced mode under the terminal. */
   statsBar: boolean;
+  /** Tips for newcomers, where they are first needed. */
+  tips: boolean;
+  /** The tips already understood. */
+  tipsSeen: string[];
 }
 
 interface SettingsStore extends Settings {
@@ -175,6 +179,8 @@ export const useSettings = create<SettingsStore>()(
       serverStats: false,
       statsTiles: true,
       statsBar: true,
+      tips: true,
+      tipsSeen: [],
       set: (patch) => set(patch),
       bumpFontSize: (delta) =>
         set((s) => ({

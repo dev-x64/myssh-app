@@ -6,6 +6,7 @@ import { useT } from "../../lib/i18n";
 import { useVault } from "../../lib/store";
 import { Confirm, cx, Empty } from "../ui";
 import { RunPanel } from "./RunPanel";
+import { Tip } from "../Tip";
 import { SnippetDialog } from "./SnippetDialog";
 
 export function matchesSnippet(snippet: Snippet, query: string): boolean {
@@ -132,6 +133,11 @@ export function SnippetsView() {
       </div>
 
       <div className="page-body scroll">
+        {snippets.length > 0 && (
+          <Tip id="snippets" title={t("tip.snippets.title")}>
+            {t("tip.snippets.text")}
+          </Tip>
+        )}
         {snippets.length === 0 ? (
           <Empty
             icon={<SquareTerminal size={24} />}

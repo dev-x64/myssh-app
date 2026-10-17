@@ -28,6 +28,8 @@ import { HostPanel } from "./HostPanel";
 import { ImportDialog } from "./ImportDialog";
 import { TailscaleBadge } from "./TailscaleBadge";
 import { watchTailscale } from "../../lib/tailscale";
+import { Tip } from "../Tip";
+import { keyOf } from "../../lib/shortcuts";
 import { OsIcon } from "./OsIcon";
 
 const HOST_DRAG = "application/x-myssh-host";
@@ -266,6 +268,11 @@ export function HostsView() {
         </div>
 
         <div className="page-body scroll" onClick={() => setSelected(null)}>
+          {snapshot.hosts.length > 0 && (
+            <Tip id="hosts" title={t("tip.hosts.title")}>
+              {t("tip.hosts.text", { newHost: keyOf("new_host"), newTab: keyOf("new_tab") })}
+            </Tip>
+          )}
           {!searching && (
             <div className="crumbs">
               <button

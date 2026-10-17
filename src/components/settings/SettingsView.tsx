@@ -115,6 +115,16 @@ export function SettingsView() {
                 ]}
               />
             </Setting>
+            <Setting name={t("settings.tips")} hint={t("settings.tips.hint")}>
+              <div className="setting-tips">
+                {s.tipsSeen.length > 0 && (
+                  <button className="btn small" onClick={() => s.set({ tips: true, tipsSeen: [] })}>
+                    {t("settings.tips.again")}
+                  </button>
+                )}
+                <Switch on={s.tips} onChange={(tips) => s.set({ tips })} label={t("settings.tips")} />
+              </div>
+            </Setting>
             <Setting name={t("settings.theme")}>
               <Segmented<AppTheme>
                 value={s.theme}

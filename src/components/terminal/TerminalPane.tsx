@@ -31,6 +31,8 @@ import { FileManager } from "./FileManager";
 import { PromptDialog } from "./PromptDialog";
 import { ShareBar } from "./SharePanel";
 import { LocalIntro } from "./LocalIntro";
+import { Tip } from "../Tip";
+import { keyOf } from "../../lib/shortcuts";
 import { SnippetsPanel } from "./SnippetsPanel";
 import { StatsLine, useServerStats } from "./StatsBar";
 
@@ -447,6 +449,12 @@ export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
       {serverStats && tab.status === "connected" && !isLocalTab(tab) && <LiveStats tab={tab} active={active} />}
 
       {tab.searchOpen && <SearchBox tab={tab} />}
+
+      {active && !isLocalTab(tab) && tab.status === "connected" && !tab.files && !tab.editor && (
+        <Tip id="terminal" title={t("tip.terminal.title")} className="tip-float">
+          {t("tip.terminal.text", { files: keyOf("files"), snippets: keyOf("snippets"), find: keyOf("find") })}
+        </Tip>
+      )}
 
       {connectScreen && <ConnectScreen tab={tab} active={active} onDone={leaveConnectScreen} />}
       {localIntro && <LocalIntro tab={tab} onDone={leaveLocalIntro} />}

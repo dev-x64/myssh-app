@@ -22,6 +22,7 @@ import { useUi, useVault } from "../../lib/store";
 import { Confirm, Empty } from "../ui";
 import { IdentityDialog } from "./IdentityDialog";
 import { InstallKeyDialog } from "./InstallKeyDialog";
+import { Tip } from "../Tip";
 import { GenerateKeyDialog, ImportKeyDialog, RenameKeyDialog } from "./KeyDialogs";
 
 type Dialog =
@@ -97,6 +98,9 @@ export function KeychainView() {
       </div>
 
       <div className="page-body scroll">
+        <Tip id="keychain" title={t("tip.keychain.title")}>
+          {t("tip.keychain.text")}
+        </Tip>
         <div className="section-title">
           {t("keychain.keys")}
           <span className="dim">{snapshot.keys.length}</span>
