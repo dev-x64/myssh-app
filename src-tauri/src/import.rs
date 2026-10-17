@@ -503,6 +503,7 @@ pub async fn import_apply(state: State<'_, AppState>, hosts: Vec<FoundHost>) -> 
                     key_id: host.key_file.and_then(|f| key_ids.get(&f).copied()),
                 },
                 startup_snippet_id: None,
+                agent_forwarding: None,
                 forwards: (!host.forwards.is_empty()).then(|| {
                     host.forwards
                         .into_iter()

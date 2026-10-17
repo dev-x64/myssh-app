@@ -112,6 +112,7 @@ pub fn spawn_install(
         unacked: AtomicUsize::new(0),
         acked: Notify::new(),
         connection: Mutex::new(None),
+        agent: Mutex::new(None),
     });
     let io = Io {
         out,

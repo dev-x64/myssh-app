@@ -364,10 +364,24 @@ pub async fn session_open(
     events: Channel<SessionEvent>,
     output: Channel<InvokeResponseBody>,
 ) -> Result<u64> {
-    let (host, credentials, startup) = state.with_vault(|v| {
+    let (host, credentials, startup, agent) = state.with_vault(|v| {
         let (host, credentials) = v.resolve_credentials(host_id)?;
         let startup = run_startup.then(|| v.startup_script(&host)).flatten();
-        Ok((host, credentials, startup))
+        // The keychain's keys, for the server to use when forwarding is on.
+        let agent: Vec<KeyParams> = if host.agent_forwarding {
+            v.agent_keys()
+                .into_iter()
+                .map(|k| KeyParams {
+                    id: k.id,
+                    label: k.label,
+                    private_key: k.private_key,
+                    passphrase: k.passphrase,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        Ok((host, credentials, startup, agent))
     })?;
     let params = ConnectParams {
         host: host.address,
@@ -383,6 +397,7 @@ pub async fn session_open(
         startup,
         cols,
         rows,
+        agent,
     };
 
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -491,6 +506,7 @@ pub async fn key_install(
             startup: None,
             cols: 80,
             rows: 24,
+            agent: Vec::new(),
         },
         public_key: key.public_key.clone(),
         comment: ssh::install_comment(&key.label),
@@ -583,6 +599,7 @@ pub async fn host_stats(state: State<'_, AppState>, host_id: Id) -> Result<myssh
         startup: None,
         cols: 80,
         rows: 24,
+        agent: Vec::new(),
     };
     ssh::probe_stats(params, state.known_hosts.clone()).await
 }

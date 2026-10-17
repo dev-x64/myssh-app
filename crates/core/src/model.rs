@@ -97,6 +97,10 @@ pub struct Host {
     /// Left out when there are none, as `pinned` is.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub forwards: Vec<PortForward>,
+    /// The server may use the keychain's keys through the session (`ssh -A`).
+    /// Left out when off, as `pinned` is.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub agent_forwarding: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -259,6 +263,7 @@ pub struct HostView {
     pub os: Option<HostOs>,
     pub pinned: bool,
     pub forwards: Vec<PortForward>,
+    pub agent_forwarding: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -338,6 +343,7 @@ impl From<&Host> for HostView {
             os: h.os.clone(),
             pinned: h.pinned,
             forwards: h.forwards.clone(),
+            agent_forwarding: h.agent_forwarding,
             created_at: h.created_at,
             updated_at: h.updated_at,
         }
@@ -422,6 +428,9 @@ pub struct HostInput {
     /// `None` keeps the forwards the host has.
     #[serde(default)]
     pub forwards: Option<Vec<PortForwardInput>>,
+    /// `None` keeps what the host has.
+    #[serde(default)]
+    pub agent_forwarding: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

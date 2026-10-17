@@ -271,6 +271,9 @@ impl Vault {
                 forwards: forwards
                     .clone()
                     .unwrap_or_else(|| existing.map(|i| data.hosts[i].forwards.clone()).unwrap_or_default()),
+                agent_forwarding: input
+                    .agent_forwarding
+                    .unwrap_or_else(|| existing.is_some_and(|i| data.hosts[i].agent_forwarding)),
                 created_at: existing.map_or(now, |i| data.hosts[i].created_at),
                 updated_at: now,
             };
@@ -357,6 +360,12 @@ impl Vault {
             }
             Ok(HostView::from(&*host))
         })
+    }
+
+    /// The keys a host with agent forwarding offers its server: every key
+    /// in the keychain.
+    pub fn agent_keys(&self) -> Vec<SshKey> {
+        self.data.keys.clone()
     }
 
     /// Replaces a host's port forwards.
@@ -1066,6 +1075,7 @@ mod tests {
                 key_id: None,
             },
             startup_snippet_id: None,
+            agent_forwarding: None,
             forwards: None,
         }
     }

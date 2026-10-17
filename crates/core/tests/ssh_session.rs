@@ -154,10 +154,22 @@ struct Client {
     screen: Vec<u8>,
     /// The connection log so far.
     log: Vec<LogEntry>,
+    /// The forwarded keys the server signed with, in order.
+    agent_used: Vec<String>,
 }
 
 impl Client {
     fn connect(server: &Server, known: &Arc<Mutex<KnownHosts>>, key: Option<&SshKey>) -> Client {
+        Client::connect_with(server, known, key, Vec::new())
+    }
+
+    /// Connects with `agent` forwarded to the server.
+    fn connect_with(
+        server: &Server,
+        known: &Arc<Mutex<KnownHosts>>,
+        key: Option<&SshKey>,
+        agent: Vec<KeyParams>,
+    ) -> Client {
         let (tx, out) = mpsc::unbounded_channel();
         let params = ConnectParams {
             host: "127.0.0.1".into(),
@@ -173,12 +185,14 @@ impl Client {
             startup: None,
             cols: 80,
             rows: 24,
+            agent,
         };
         Client {
             handle: ssh::spawn(params, known.clone(), tx),
             out,
             screen: Vec::new(),
             log: Vec::new(),
+            agent_used: Vec::new(),
         }
     }
 
@@ -223,6 +237,7 @@ impl Client {
                 Ok(Some(SessionOutput::Event(SessionEvent::Closed { .. }))) | Ok(None) => {
                     panic!("session closed while waiting for {needle:?}")
                 }
+                Ok(Some(SessionOutput::Event(SessionEvent::AgentUsed { key }))) => self.agent_used.push(key),
                 Ok(Some(_)) => {}
                 Err(_) => panic!(
                     "{needle:?} never appeared; screen: {}",
@@ -600,12 +615,14 @@ async fn startup_script_is_typed_once_the_shell_is_up() {
         startup: Some("A=4\necho first-$((A*10+2))\necho second-$((A+3))".into()),
         cols: 80,
         rows: 24,
+        agent: Vec::new(),
     };
     let mut client = Client {
         handle: ssh::spawn(params, known, tx),
         out,
         screen: Vec::new(),
         log: Vec::new(),
+        agent_used: Vec::new(),
     };
     loop {
         match client.milestone().await {
@@ -1107,6 +1124,7 @@ async fn install(
             startup: None,
             cols: 80,
             rows: 24,
+            agent: Vec::new(),
         },
         key: key_params(new),
         public_key: new.public_key.clone(),
@@ -1363,4 +1381,60 @@ async fn ports_forwarded_through_the_terminal_connection() {
         .forward_local(ForwardTarget { local_port: 0, remote_host: "127.0.0.1".into(), remote_port: echo })
         .await;
     assert!(matches!(after, Err(myssh_core::Error::SessionClosed)), "{after:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_server_signs_in_onwards_with_a_forwarded_key() {
+    let login = keys::generate(KeyKind::Ed25519, "login").unwrap();
+    let onward = keys::generate(KeyKind::Ed25519, "github").unwrap();
+    let rsa = keys::generate(KeyKind::Rsa4096, "old-rsa").unwrap();
+    let Some(server) = Server::start(&[&login, &onward, &rsa]) else {
+        return;
+    };
+    let state = tempfile::tempdir().unwrap();
+    let known = known_hosts(state.path());
+
+    // Signed in with one key; two others forwarded, which the server lists.
+    let mut client = Client::connect_with(&server, &known, Some(&login), vec![key_params(&onward), key_params(&rsa)]);
+    loop {
+        match client.milestone().await {
+            SessionEvent::Prompt { id, .. } => client.handle.reply(id, PromptReply::Accept).unwrap(),
+            SessionEvent::Connected => break,
+            other => panic!("expected Connected, got {other:?}"),
+        }
+    }
+    client.type_line("ssh-add -l; echo listed-$((1+1))");
+    client.screen_contains("listed-2").await;
+    let screen = String::from_utf8_lossy(&client.screen).into_owned();
+    assert!(screen.contains(&onward.fingerprint) && screen.contains(&rsa.fingerprint), "{screen}");
+    assert!(!screen.contains(&login.fingerprint), "only the forwarded keys are offered: {screen}");
+
+    // From the server, on to a host that knows the forwarded key: the
+    // signature is made here, and the session says which key it was.
+    client.type_line(&format!(
+        "ssh -F /dev/null -o IdentityFile=/dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+         -o BatchMode=yes -o LogLevel=ERROR -p {} 127.0.0.1 echo onward-$((2+3))",
+        server.port
+    ));
+    client.screen_contains("onward-5").await;
+    assert!(client.agent_used.iter().any(|key| key == "github"), "{:?}", client.agent_used);
+
+    // An RSA key signs as the server asks (SHA-2), not with the SHA-1 servers refuse.
+    let pub_file = server.path("home/rsa.pub");
+    std::fs::write(&pub_file, format!("{}\n", rsa.public_key)).unwrap();
+    client.type_line(&format!(
+        "ssh -F /dev/null -o IdentitiesOnly=yes -o IdentityFile={} -o StrictHostKeyChecking=no \
+         -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR -p {} 127.0.0.1 echo rsa-$((4+4))",
+        pub_file.display(),
+        server.port
+    ));
+    client.screen_contains("rsa-8").await;
+    assert!(client.agent_used.iter().any(|key| key == "old-rsa"), "{:?}", client.agent_used);
+
+    // Without forwarding the server has no agent at all.
+    let mut plain = connected(&server, &known, &login).await;
+    plain.type_line("ssh-add -l; echo none-$((3+4))");
+    plain.screen_contains("none-7").await;
+    let screen = String::from_utf8_lossy(&plain.screen).into_owned();
+    assert!(screen.contains("authentication agent"), "{screen}");
 }

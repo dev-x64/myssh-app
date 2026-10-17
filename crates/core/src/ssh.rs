@@ -25,6 +25,7 @@ use crate::known_hosts::{HostKeyStatus, KnownHosts};
 use crate::model::Id;
 use crate::{Error, Result};
 
+mod agent;
 mod archive;
 mod forward;
 mod install;
@@ -52,6 +53,10 @@ pub struct ConnectParams {
     pub startup: Option<String>,
     pub cols: u32,
     pub rows: u32,
+    /// Keys the server may use through this session (agent forwarding).
+    /// Empty: no forwarding. Ones that need a passphrase not saved are
+    /// left out rather than asked for.
+    pub agent: Vec<KeyParams>,
 }
 
 pub struct KeyParams {
@@ -103,6 +108,10 @@ pub enum SessionEvent {
     },
     /// A fresh connection signed in with the new key alone.
     KeyVerified,
+    /// The server signed in somewhere with one of the forwarded keys.
+    AgentUsed {
+        key: String,
+    },
     Closed {
         reason: CloseReason,
         exit_status: Option<u32>,
@@ -254,6 +263,8 @@ struct Shared {
     /// The live connection, while the shell is up. Side channels (commands,
     /// file transfer) are opened on it.
     connection: Mutex<Option<Arc<client::Handle<Handler>>>>,
+    /// The keys the server may ask to sign with, once forwarding is on.
+    agent: Mutex<Option<Arc<Vec<agent::AgentKey>>>>,
 }
 
 /// Output of a command run on a side channel.
@@ -653,6 +664,7 @@ pub async fn probe_stats(params: ConnectParams, known_hosts: Arc<Mutex<KnownHost
             unacked: AtomicUsize::new(0),
             acked: Notify::new(),
             connection: Mutex::new(None),
+            agent: Mutex::new(None),
         }),
         interactive: false,
     };
@@ -678,6 +690,7 @@ pub fn spawn(
         unacked: AtomicUsize::new(0),
         acked: Notify::new(),
         connection: Mutex::new(None),
+        agent: Mutex::new(None),
     });
     let io = Io {
         out,
@@ -745,9 +758,14 @@ async fn drive(
     };
 
     let handle = Arc::new(handle);
+    let forwarding = agent_keys(&params.agent).await;
+    let forward_agent = !forwarding.is_empty();
+    if forward_agent {
+        *io.shared.agent.lock().unwrap() = Some(Arc::new(forwarding));
+    }
     io.stage(Stage::OpeningShell);
     io.log(LogEntry::ShellOpening);
-    let mut channel = timeout(SHELL_TIMEOUT, open_shell(&handle, size))
+    let mut channel = timeout(SHELL_TIMEOUT, open_shell(&handle, size, forward_agent))
         .await
         .map_err(|_| Error::Timeout)??;
     io.log(LogEntry::ShellReady);
@@ -941,6 +959,22 @@ impl client::Handler for Handler {
         self.io.event(SessionEvent::Banner {
             text: banner.to_string(),
         });
+        Ok(())
+    }
+
+    /// The server wants the forwarded agent. Without forwarding on, the
+    /// request is turned down (dropping the reply does that).
+    async fn server_channel_open_agent_forward(
+        &mut self,
+        channel: Channel<client::Msg>,
+        reply: client::ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> Result<()> {
+        let keys = self.io.shared.agent.lock().unwrap().clone();
+        if let Some(keys) = keys {
+            reply.accept().await;
+            tokio::spawn(agent::serve(channel.into_stream(), keys, self.io.clone()));
+        }
         Ok(())
     }
 }
@@ -1196,13 +1230,32 @@ async fn load_key(key: &KeyParams, io: &Io) -> Result<PrivateKey> {
 async fn open_shell(
     handle: &client::Handle<Handler>,
     (cols, rows): (u32, u32),
+    forward_agent: bool,
 ) -> Result<Channel<client::Msg>> {
     let channel = handle.channel_open_session().await?;
     channel
         .request_pty(false, TERM, cols.max(1), rows.max(1), 0, 0, &[])
         .await?;
+    // Asked for before the shell starts, so that its environment names the
+    // forwarded agent (SSH_AUTH_SOCK).
+    if forward_agent {
+        channel.agent_forward(false).await?;
+    }
     channel.request_shell(false).await?;
     Ok(channel)
+}
+
+/// The keys to forward, opened without asking anyone: a key that needs a
+/// passphrase not saved is left out, as is one that cannot be read.
+async fn agent_keys(keys: &[KeyParams]) -> Vec<agent::AgentKey> {
+    let mut found = Vec::new();
+    for key in keys {
+        match decrypt_key(&key.private_key, key.passphrase.as_deref()).await {
+            Ok(private) => found.extend(agent::AgentKey::new(key.label.clone(), private)),
+            Err(e) => log::info!("key \"{}\" is not forwarded: {e}", key.label),
+        }
+    }
+    found
 }
 
 /// How long the shell's first output has to pause before the startup snippet

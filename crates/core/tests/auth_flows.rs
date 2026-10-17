@@ -219,6 +219,7 @@ impl Client {
             startup: None,
             cols: 80,
             rows: 24,
+            agent: Vec::new(),
         };
         Client {
             handle: ssh::spawn(params, known, tx),
@@ -568,6 +569,7 @@ async fn trusting(port: u16) -> (tempfile::TempDir, Arc<Mutex<KnownHosts>>) {
         startup: None,
         cols: 80,
         rows: 24,
+        agent: Vec::new(),
     };
     let mut client = Client {
         handle: ssh::spawn(params, known.clone(), tx),
@@ -592,6 +594,7 @@ fn probe_params(port: u16, password: Option<&str>) -> ConnectParams {
         startup: None,
         cols: 80,
         rows: 24,
+        agent: Vec::new(),
     }
 }
 

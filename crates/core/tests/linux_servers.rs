@@ -68,6 +68,7 @@ fn params(port: u16, password: Option<&str>, key: Option<&SshKey>) -> ConnectPar
         startup: None,
         cols: 100,
         rows: 30,
+        agent: Vec::new(),
     }
 }
 
