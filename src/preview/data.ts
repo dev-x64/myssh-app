@@ -85,6 +85,7 @@ function host(
     os,
     pinned: false,
     forwards: [],
+    agent_forwarding: false,
     created_at: now - 50 * day,
     updated_at: now - 2 * day,
     ...extra,

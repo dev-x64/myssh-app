@@ -4384,6 +4384,343 @@ html[data-theme="light"] .welcome-glow i:last-child {
   animation: pop 0.1s ease-out;
 }
 
+/* Key forwarding on a host: what it does, drawn as it happens. One sign-in
+   takes 5 s: the server asks (0–26%), this Mac signs (26–46%), the
+   signature goes back (46–74%), the server is let in (76–98%). */
+.agent-box .field-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.agent-box.on {
+  border-color: var(--accent-line);
+}
+
+.agent-lead,
+.agent-next {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.agent-next {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.agent-more {
+  align-self: flex-start;
+  font-size: 12.5px;
+}
+
+.agent-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+}
+
+.agent-command {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-prompt {
+  color: var(--ok);
+}
+
+.agent-stage {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.agent-track {
+  position: absolute;
+  top: 17px;
+  left: 16%;
+  right: 16%;
+  height: 0;
+  border-top: 2px dashed var(--line-strong);
+}
+
+.agent-dot {
+  position: absolute;
+  top: -6px;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.agent-dot.ask {
+  background: #6ea8ff;
+  box-shadow: 0 0 10px #6ea8ff;
+  animation: agent-ask 5s ease-in-out infinite;
+}
+
+.agent-dot.sign {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: agent-sign 5s ease-in-out infinite;
+}
+
+.agent-node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 0 1 31%;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  text-align: center;
+}
+
+.agent-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--text-2);
+}
+
+.agent-node.mac .agent-icon {
+  color: var(--accent);
+  animation: agent-glow 5s ease-in-out infinite;
+}
+
+.agent-key-badge,
+.agent-ok-badge {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--bg-0);
+}
+
+.agent-key-badge {
+  color: var(--accent);
+}
+
+.agent-ok-badge {
+  color: var(--ok);
+  opacity: 0;
+  animation: agent-ok 5s ease-in-out infinite;
+}
+
+.agent-node b {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-node small {
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.agent-steps {
+  position: relative;
+  min-height: 34px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.agent-steps span {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: agent-step 5s ease-in-out infinite both;
+}
+
+.agent-steps .s2 {
+  animation-delay: 1.25s;
+}
+
+.agent-steps .s3 {
+  animation-delay: 2.5s;
+}
+
+.agent-steps .s4 {
+  color: var(--ok);
+  animation-delay: 3.75s;
+}
+
+.agent-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.agent-keys-title {
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.agent-keys .muted {
+  margin: 0;
+  font-size: 12px;
+}
+
+.agent-key {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+}
+
+.agent-key svg {
+  color: var(--accent);
+}
+
+.agent-key span {
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.agent-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agent-warn svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--warn);
+}
+
+@keyframes agent-ask {
+  0% {
+    left: 100%;
+    opacity: 0;
+  }
+  3%,
+  24% {
+    opacity: 1;
+  }
+  26%,
+  100% {
+    left: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes agent-sign {
+  0%,
+  45% {
+    left: 0;
+    opacity: 0;
+  }
+  48%,
+  72% {
+    opacity: 1;
+  }
+  74%,
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes agent-glow {
+  0%,
+  24%,
+  48%,
+  100% {
+    box-shadow: none;
+    border-color: var(--line-strong);
+  }
+  30%,
+  42% {
+    box-shadow: 0 0 0 4px var(--accent-soft), 0 0 16px color-mix(in srgb, var(--accent) 45%, transparent);
+    border-color: var(--accent);
+  }
+}
+
+@keyframes agent-ok {
+  0%,
+  75% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  80%,
+  96% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes agent-step {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  3%,
+  22% {
+    opacity: 1;
+    transform: none;
+  }
+  25%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Still, the drawing shows its last step and every step is listed. */
+@media (prefers-reduced-motion: reduce) {
+  .agent-dot,
+  .agent-node.mac .agent-icon,
+  .agent-ok-badge {
+    animation: none;
+  }
+  .agent-ok-badge {
+    opacity: 1;
+  }
+  .agent-steps {
+    min-height: 0;
+  }
+  .agent-steps span {
+    position: static;
+    display: block;
+    opacity: 1;
+    animation: none;
+  }
+}
+
 /* Port forwarding section: cards, the editor's drawing and its helper. */
 .panel.fwd-editor {
   width: 430px;

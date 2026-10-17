@@ -85,6 +85,8 @@ export interface HostView {
   pinned: boolean;
   /** Ports of this computer that lead through the host's connection. */
   forwards: PortForward[];
+  /** The server may sign in onwards with the keychain's keys (ssh -A). */
+  agent_forwarding: boolean;
   created_at: number;
   updated_at: number;
 }
@@ -326,6 +328,8 @@ export interface HostInput {
   startup_snippet_id: Id | null;
   /** Left out, the host keeps the forwards it has. */
   forwards?: PortForwardInput[];
+  /** Left out, the host keeps what it has. */
+  agent_forwarding?: boolean;
 }
 
 export interface GroupInput {
@@ -451,6 +455,8 @@ export type SessionEvent =
   | { type: "connected" }
   | { type: "key_installed"; already_present: boolean }
   | { type: "key_verified" }
+  /** The server signed in somewhere with one of the forwarded keys. */
+  | { type: "agent_used"; key: string }
   | { type: "log"; entry: LogEntry }
   | { type: "closed"; reason: CloseReason; exit_status: number | null; error: ApiError | null };
 

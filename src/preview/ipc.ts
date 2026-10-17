@@ -105,6 +105,7 @@ export function createHandler(scenario: Scenario) {
       os: existing?.os ?? null,
       pinned: existing?.pinned ?? false,
       forwards: input.forwards ? forwardsOf(input.forwards) : (existing?.forwards ?? []),
+      agent_forwarding: input.agent_forwarding ?? existing?.agent_forwarding ?? false,
       created_at: existing?.created_at ?? stamp(),
       updated_at: stamp(),
     };

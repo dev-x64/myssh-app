@@ -14,6 +14,7 @@ import { useT } from "../../lib/i18n";
 import { getSession, openHost } from "../../lib/sessions";
 import { hostPanelKey, useUi, useVault, type HostPanel as PanelState } from "../../lib/store";
 import { Field, PasswordInput, Segmented, TagInput } from "../ui";
+import { AgentForwarding } from "./AgentForwarding";
 
 /** Groups as a flat list with their full path, for a select. */
 export function groupOptions(groups: Group[]): { id: Id; path: string }[] {
@@ -228,6 +229,7 @@ export function HostPanel(props: {
   const [startupId, setStartupId] = useState<Id | null>(
     saved ? saved.startupId : (editing?.startup_snippet_id ?? null),
   );
+  const [agentForwarding, setAgentForwarding] = useState(saved?.agentForwarding ?? editing?.agent_forwarding ?? false);
   useEffect(() => {
     useUi.getState().setHostDraft({
       key: draftKey,
@@ -242,8 +244,9 @@ export function HostPanel(props: {
       keyId,
       identityId,
       startupId,
+      agentForwarding,
     });
-  }, [draftKey, label, address, port, groupId, tags, authKind, username, password, keyId, identityId, startupId]);
+  }, [draftKey, label, address, port, groupId, tags, authKind, username, password, keyId, identityId, startupId, agentForwarding]);
   const [busy, setBusy] = useState(false);
   const [touched, setTouched] = useState(false);
 
@@ -300,6 +303,7 @@ export function HostPanel(props: {
           ? { kind: "identity", identity_id: identityId! }
           : { kind: "inline", username, password: effectivePassword, key_id: keyId },
       startup_snippet_id: startupId,
+      agent_forwarding: agentForwarding,
     };
     setBusy(true);
     const saved = await mutate(() => api.hostSave(input), connect ? undefined : t("host.saved"));
@@ -505,6 +509,12 @@ export function HostPanel(props: {
           </Field>
         )}
 
+        <AgentForwarding
+          on={agentForwarding}
+          onChange={setAgentForwarding}
+          hostName={label.trim() || address.trim()}
+          keys={snapshot.keys}
+        />
       </div>
 
       <div className="panel-foot">

@@ -250,6 +250,7 @@ export interface HostDraft {
   keyId: Id | null;
   identityId: Id | null;
   startupId: Id | null;
+  agentForwarding: boolean;
 }
 
 interface UiStore {

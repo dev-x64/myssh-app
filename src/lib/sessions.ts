@@ -124,6 +124,8 @@ export class TermSession {
   private announcedDir: string | null = null;
   /** When the host was last told that a guest has the keyboard. */
   private heldBackAt = 0;
+  /** When each forwarded key was last said to be used, so as not to say it at every signature. */
+  private readonly agentNoted = new Map<string, number>();
   readonly suggester = new Suggester(this);
   private readonly highlighter: Highlighter;
   private links: WebLinksAddon | null = null;
@@ -342,6 +344,16 @@ export class TermSession {
         if (this.pendingRun) this.runWhenListening(false);
         if (this.hostId !== LOCAL_HOST_ID && this.sessionId !== null) {
           forwardsConnected(this.tabId, this.sessionId, this.hostId);
+        }
+        break;
+      }
+      case "agent_used": {
+        // Said once a while per key: a git pull may sign several times.
+        const now = Date.now();
+        if (now - (this.agentNoted.get(event.key) ?? 0) > 30_000) {
+          this.agentNoted.set(event.key, now);
+          const host = useVault.getState().snapshot.hosts.find((h) => h.id === this.hostId);
+          useUi.getState().toast("info", t("agent.used", { host: host ? hostTitle(host) : "", key: event.key }));
         }
         break;
       }
