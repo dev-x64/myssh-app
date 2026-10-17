@@ -6,7 +6,7 @@ import { api, type ApiError, type PortForward, type PortForwardInput } from "../
 import { closeForward, openForward, refreshForwards, useForwards, type OpenForward } from "../../lib/forwards";
 import { errorText, useT, type T } from "../../lib/i18n";
 import { LINUX } from "../../lib/platform";
-import { useVault, type Tab } from "../../lib/store";
+import { useUi, useVault, type Tab } from "../../lib/store";
 import { cx, Switch } from "../ui";
 
 /** How often an open panel asks how the forwards are doing. */
@@ -99,6 +99,17 @@ export function ForwardsButton({ tab }: { tab: Tab }) {
           <div className="share-head">
             <Cable size={15} />
             <span className="grow">{t("fwd.title")}</span>
+            {editing === undefined && (
+              <button
+                className="btn small ghost"
+                onClick={() => {
+                  setOpen(false);
+                  useUi.getState().goHome("forwards");
+                }}
+              >
+                {t("fwd.all")}
+              </button>
+            )}
             {editing === undefined && forwards.length > 0 && (
               <button className="btn small" onClick={() => setEditing(null)}>
                 <Plus size={13} />

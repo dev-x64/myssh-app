@@ -99,7 +99,7 @@ export function hostSubtitle(host: HostView, snapshot: Snapshot): string {
 
 // ------------------------------------------------------------------- ui ---
 
-export type View = "hosts" | "keychain" | "snippets" | "known_hosts" | "cloud" | "settings";
+export type View = "hosts" | "keychain" | "snippets" | "forwards" | "known_hosts" | "cloud" | "settings";
 
 export interface TabClosed {
   reason: CloseReason;

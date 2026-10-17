@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
+  Cable,
   FolderOpen,
   KeyRound,
   LayoutGrid,
@@ -25,6 +26,7 @@ import { KeychainView } from "./components/keychain/KeychainView";
 import { KnownHostsView } from "./components/known/KnownHostsView";
 import { SettingsView } from "./components/settings/SettingsView";
 import { SnippetsView } from "./components/snippets/SnippetsView";
+import { ForwardsView } from "./components/forwards/ForwardsView";
 import { RunGroupList } from "./components/terminal/RunGroup";
 import { TerminalPane } from "./components/terminal/TerminalPane";
 import { cx, Toasts } from "./components/ui";
@@ -52,6 +54,7 @@ const NAV: { view: View; label: MessageKey; icon: typeof Server }[] = [
   { view: "hosts", label: "nav.hosts", icon: Server },
   { view: "keychain", label: "nav.keychain", icon: KeyRound },
   { view: "snippets", label: "nav.snippets", icon: SquareTerminal },
+  { view: "forwards", label: "nav.forwards", icon: Cable },
   { view: "known_hosts", label: "nav.known_hosts", icon: ShieldCheck },
 ];
 
@@ -433,6 +436,7 @@ function Home() {
   const hostCount = useVault((s) => s.snapshot.hosts.length);
   const keychainCount = useVault((s) => s.snapshot.keys.length + s.snapshot.identities.length);
   const snippetCount = useVault((s) => s.snapshot.snippets.length);
+  const forwardCount = useVault((s) => s.snapshot.hosts.reduce((n, h) => n + h.forwards.length, 0));
   const count = (target: View) =>
     target === "hosts"
       ? hostCount
@@ -440,7 +444,9 @@ function Home() {
         ? keychainCount
         : target === "snippets"
           ? snippetCount
-          : 0;
+          : target === "forwards"
+            ? forwardCount
+            : 0;
 
   return (
     <div className="home">
@@ -475,6 +481,7 @@ function Home() {
         {view === "hosts" && <HostsView />}
         {view === "keychain" && <KeychainView />}
         {view === "snippets" && <SnippetsView />}
+        {view === "forwards" && <ForwardsView />}
         {view === "known_hosts" && <KnownHostsView />}
         {view === "cloud" && <CloudView />}
         {view === "settings" && <SettingsView />}
