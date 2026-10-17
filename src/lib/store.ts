@@ -130,6 +130,8 @@ export interface Tab {
   reconnect: { attempt: number; at: number; network?: boolean } | null;
   /** The connection is being asked whether it still answers (the network changed). */
   checking?: boolean;
+  /** The shell asks for a password on this cell, and the host has one saved to offer. */
+  passwordOffer?: { row: number; col: number } | null;
   /** Automatic reconnection gave up after this many attempts. */
   gaveUp: number | null;
   searchOpen: boolean;

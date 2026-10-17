@@ -15,6 +15,10 @@ interface Session {
   /** A prompt waiting for an answer: what to do once it comes. */
   waiting: ((reply: PromptReply) => void) | null;
   closed: boolean;
+  /** `su` asked for a password: what is typed is not echoed, and Enter checks it. */
+  secret: boolean;
+  /** Became root with `su`. */
+  root: boolean;
 }
 
 const sessions = new Map<number, Session>();
@@ -30,6 +34,7 @@ function write(session: Session, text: string) {
 }
 
 function user(session: Session): string {
+  if (session.root) return "root";
   return session.host.auth.kind === "inline" ? session.host.auth.username || "root" : "ops";
 }
 
@@ -65,6 +70,12 @@ function run(session: Session, command: string) {
     session.closed = true;
     session.events.onmessage({ type: "closed", reason: "exited", exit_status: 0, error: null });
     sessions.forEach((value, key) => value === session && sessions.delete(key));
+    return;
+  }
+  if (trimmed === "su" || trimmed === "su root" || trimmed === "su -") {
+    // Asks for the password as su does; the one the preview keeps opens it.
+    session.secret = true;
+    write(session, "Password: ");
     return;
   }
   if (trimmed === "clear") {
@@ -156,6 +167,8 @@ export function open(
     cwd: host.auth.kind === "inline" && host.auth.username !== "root" ? `/home/${host.auth.username}` : "/root",
     waiting: null,
     closed: false,
+    secret: false,
+    root: false,
   };
   sessions.set(id, session);
   if (local) {
@@ -193,15 +206,22 @@ export function input(id: number, data: string) {
       write(session, "\r\n");
       const line = session.line;
       session.line = "";
-      run(session, line);
+      if (session.secret) {
+        session.secret = false;
+        if (line === "preview-password") {
+          session.root = true;
+          session.cwd = "/root";
+        } else write(session, "su: Authentication failure\r\n");
+        prompt(session);
+      } else run(session, line);
     } else if (ch === "\x7f" || ch === "\b") {
       if (session.line) {
         session.line = session.line.slice(0, -1);
-        write(session, "\b \b");
+        if (!session.secret) write(session, "\b \b");
       }
     } else if (ch === "\x15") {
       // Ctrl+U: the line typed so far goes, as in a real shell.
-      write(session, "\b \b".repeat([...session.line].length));
+      if (!session.secret) write(session, "\b \b".repeat([...session.line].length));
       session.line = "";
     } else if (ch === "\x03") {
       session.line = "";
@@ -213,7 +233,7 @@ export function input(id: number, data: string) {
       write(session, session.line);
     } else if (ch >= " ") {
       session.line += ch;
-      write(session, ch);
+      if (!session.secret) write(session, ch);
     }
   }
 }

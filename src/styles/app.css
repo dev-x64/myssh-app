@@ -1951,6 +1951,47 @@ button.link {
   font-size: 12.5px;
 }
 
+/* The saved password, offered at the prompt that asks for it. */
+.password-offer {
+  position: absolute;
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: password-offer-in 0.18s ease-out;
+}
+
+.password-offer:hover {
+  border-color: var(--accent);
+}
+
+.password-offer svg {
+  color: var(--accent);
+}
+
+.password-offer small {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+@keyframes password-offer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+
 /* Eight rows, then it scrolls. */
 .suggest-list {
   max-height: 208px;

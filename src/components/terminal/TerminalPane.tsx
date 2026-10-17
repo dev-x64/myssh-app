@@ -8,6 +8,7 @@ import {
   File,
   Folder,
   History,
+  KeyRound,
   Sparkles,
   SpellCheck,
   SquareTerminal,
@@ -17,7 +18,7 @@ import {
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { errorText, useT, type MessageKey } from "../../lib/i18n";
-import { closeTab, getSession } from "../../lib/sessions";
+import { closeTab, getSession, savedPassword } from "../../lib/sessions";
 import { isDark, useSettings } from "../../lib/settings";
 import { useShare } from "../../lib/share";
 import { isLocalTab, useUi, useVault, type Suggestion, type Tab } from "../../lib/store";
@@ -147,6 +148,56 @@ const SUGGEST_ICONS: Record<Suggestion["kind"], LucideIcon> = {
 };
 
 /** Suggestions for the command being typed, anchored under the cursor. */
+/**
+ * The shell asks for a password (su, sudo, ssh onwards…) and the host has
+ * one saved: it is offered right after the prompt, and typed only when asked.
+ */
+function PasswordOffer({ tab }: { tab: Tab }) {
+  const t = useT();
+  const session = getSession(tab.id);
+  const ref = useRef<HTMLButtonElement>(null);
+  const [place, setPlace] = useState<React.CSSProperties>({ visibility: "hidden" });
+  const offer = tab.passwordOffer;
+  const saved = savedPassword(tab.hostId);
+
+  useLayoutEffect(() => {
+    const chip = ref.current;
+    const wrap = chip?.parentElement;
+    const screen = wrap?.querySelector<HTMLElement>(".xterm-screen");
+    if (!chip || !wrap || !screen || !session || !offer) return;
+    const origin = wrap.getBoundingClientRect();
+    const area = screen.getBoundingClientRect();
+    const cellWidth = area.width / session.term.cols;
+    const cellHeight = area.height / session.term.rows;
+    const top = area.top - origin.top + offer.row * cellHeight + cellHeight / 2 - chip.offsetHeight / 2;
+    const after = area.left - origin.left + (offer.col + 1) * cellWidth + 4;
+    // Beside the prompt when it fits there, under it otherwise.
+    if (after + chip.offsetWidth <= origin.width - 6) setPlace({ left: after, top });
+    else {
+      const left = Math.max(6, Math.min(area.left - origin.left + offer.col * cellWidth, origin.width - chip.offsetWidth - 6));
+      setPlace({ left, top: area.top - origin.top + (offer.row + 1) * cellHeight + 2 });
+    }
+  }, [session, offer]);
+
+  if (!session || !saved) return null;
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className="password-offer"
+      style={place}
+      title={t("term.password.hint")}
+      // The terminal keeps the keyboard: typing on is still possible.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => void session.typeSavedPassword()}
+    >
+      <KeyRound size={13} />
+      <span>{t("term.password.offer")}</span>
+      <small>{saved.username}</small>
+    </button>
+  );
+}
+
 function SuggestList({ tab }: { tab: Tab }) {
   const t = useT();
   const session = getSession(tab.id);
@@ -442,6 +493,7 @@ export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
         <div className="term-wrap">
           <div className="term-host" ref={hostRef} onContextMenu={(e) => e.preventDefault()} />
           {tab.suggest && active && <SuggestList tab={tab} />}
+          {tab.passwordOffer && active && !tab.suggest && <PasswordOffer tab={tab} />}
           {typist && <CursorBadge term={session.term} name={typist.name} tone={typist.tone} />}
         </div>
         {tab.side === "snippets" && <SnippetsPanel tab={tab} />}

@@ -93,6 +93,22 @@ function hideLinkTip() {
   if (linkTip) linkTip.hidden = true;
 }
 
+/** A line that asks for a password and waits on it: su, sudo, ssh, mysql -p… */
+const PASSWORD_PROMPT = /(?:password|passwort|kennwort|contraseña|mot de passe|пароль)[^:\n]{0,60}:\s*$/i;
+
+/** The password the host keeps (its own, or its identity's), if it keeps one. */
+export function savedPassword(hostId: Id): { username: string; fetch: () => Promise<string | null> } | null {
+  const snapshot = useVault.getState().snapshot;
+  const host = snapshot.hosts.find((h) => h.id === hostId);
+  if (!host) return null;
+  if (host.auth.kind === "inline") {
+    return host.auth.has_password ? { username: host.auth.username, fetch: () => api.hostPassword(host.id) } : null;
+  }
+  const identityId = host.auth.identity_id;
+  const identity = snapshot.identities.find((i) => i.id === identityId);
+  return identity?.has_password ? { username: identity.username, fetch: () => api.identityPassword(identity.id) } : null;
+}
+
 /** How long the output has to pause before a snippet is looked at as maybe done. */
 const RUN_SETTLE_MS = 700;
 /** How long a new shell's first output has to pause before a snippet is typed, and the longest wait. */
@@ -288,6 +304,7 @@ export class TermSession {
         this.ack(data.length);
         // Guests of a shared session get it in the order it was drawn here.
         shareOutput(this.tabId, data);
+        this.lookForPasswordPrompt();
       });
     };
 
@@ -621,8 +638,38 @@ export class TermSession {
       }
       return;
     }
+    // Typing for oneself: the offer of the saved password is not wanted.
+    if (tab.passwordOffer) this.patch({ passwordOffer: null });
     this.suggester.onInput(data);
     this.type(data);
+  }
+
+  /**
+   * Offers the host's saved password when the shell's last line asks for
+   * one (su, sudo, ssh onwards…) with the cursor right after it. Nothing is
+   * sent unless the offer is taken.
+   */
+  private lookForPasswordPrompt() {
+    const tab = this.tab();
+    if (!tab || tab.status !== "connected" || this.hostId === LOCAL_HOST_ID) return;
+    const buffer = this.term.buffer.active;
+    const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? "";
+    const asking = PASSWORD_PROMPT.test(line) && buffer.cursorX >= line.trimEnd().length && savedPassword(this.hostId) !== null;
+    const offer = asking ? { row: buffer.cursorY, col: buffer.cursorX } : null;
+    const now = tab.passwordOffer ?? null;
+    if (offer?.row !== now?.row || offer?.col !== now?.col) this.patch({ passwordOffer: offer });
+  }
+
+  /** Types the host's saved password at the prompt asking for it, and Enter. Never kept in the history. */
+  async typeSavedPassword() {
+    const saved = savedPassword(this.hostId);
+    this.patch({ passwordOffer: null });
+    if (!saved) return;
+    const password = await saved.fetch().catch(() => null);
+    if (!password || this.tab()?.status !== "connected") return;
+    this.suggester.reset();
+    this.type(`${password}\r`);
+    this.focus();
   }
 
   /** Sends text to the shell exactly as if it had been typed. */
