@@ -28,8 +28,11 @@ export function NewTab() {
   const snapshot = useVault((s) => s.snapshot);
   const recent = useRecent((s) => s.entries);
   const [query, setQuery] = useState("");
-  /** The host the arrows are on; Enter connects to it. */
-  const [cursor, setCursor] = useState(0);
+  /**
+   * The host the arrows are on; Enter connects to it. None at first, so that
+   * no host looks singled out: the arrows, the pointer or a search pick one.
+   */
+  const [cursor, setCursor] = useState(-1);
   const [joining, setJoining] = useState(false);
   const list = useRef<HTMLDivElement>(null);
 
@@ -70,9 +73,10 @@ export function NewTab() {
   const order: HostView[] = searching
     ? found
     : [...recentHosts.map((r) => r.host), ...sections.flatMap((section) => section.hosts)];
-  const at = Math.min(cursor, Math.max(order.length - 1, 0));
+  const at = cursor < 0 ? -1 : Math.min(cursor, order.length - 1);
 
-  useEffect(() => setCursor(0), [query]);
+  // A search starts on its first match, so that Enter connects to it.
+  useEffect(() => setCursor(query.trim() ? 0 : -1), [query]);
   useEffect(() => {
     list.current?.querySelector(".card.selected")?.scrollIntoView({ block: "nearest" });
   }, [at]);
