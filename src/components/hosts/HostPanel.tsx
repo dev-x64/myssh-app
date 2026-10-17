@@ -1,4 +1,4 @@
-import { Eraser, Eye, EyeOff, Pencil, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowRight, Eraser, Eye, EyeOff, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { mutate } from "../../lib/actions";
 import {
@@ -7,12 +7,14 @@ import {
   type HostInput,
   type HostView,
   type Id,
+  type PortForwardInput,
   type SecretInput,
   type SharedCredentials,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { getSession, openHost } from "../../lib/sessions";
 import { hostPanelKey, useUi, useVault, type HostPanel as PanelState } from "../../lib/store";
+import { ForwardForm } from "../terminal/ForwardsPanel";
 import { Field, PasswordInput, Segmented, TagInput } from "../ui";
 
 /** Groups as a flat list with their full path, for a select. */
@@ -169,6 +171,83 @@ function SharedHint(props: {
   );
 }
 
+/**
+ * The host's forwarded ports, kept with the form and saved along with the
+ * host. They are opened from a terminal tab of the host, or with every
+ * connection when set to.
+ */
+function ForwardsSection(props: { forwards: PortForwardInput[]; onChange: (forwards: PortForwardInput[]) => void }) {
+  const t = useT();
+  /** The forward being edited, by position; `-1` is a new one. */
+  const [editing, setEditing] = useState<number | null>(null);
+  const { forwards } = props;
+  const submit = async (input: PortForwardInput) => {
+    props.onChange(editing === -1 ? [...forwards, input] : forwards.map((f, i) => (i === editing ? input : f)));
+    setEditing(null);
+  };
+  const current = editing !== null && editing >= 0 ? forwards[editing] : null;
+
+  return (
+    <div className="group-box">
+      <div className="row" style={{ alignItems: "center" }}>
+        <span className="field-label grow">{t("fwd.title")}</span>
+        {editing === null && (
+          <button type="button" className="btn small" onClick={() => setEditing(-1)}>
+            <Plus size={13} />
+            {t("fwd.add")}
+          </button>
+        )}
+      </div>
+      {forwards.length === 0 && editing === null && <p className="muted">{t("fwd.host_hint")}</p>}
+      {forwards.length > 0 && (
+        <div className="fwd-list">
+          {forwards.map((f, i) => (
+            <div key={f.id ?? `new-${i}`} className={editing === i ? "fwd-row editing" : "fwd-row"}>
+              <div className="fwd-main">
+                <div className="fwd-name">
+                  <span className="fwd-port">{f.local_port}</span>
+                  {f.label && <span className="fwd-label">{f.label}</span>}
+                  {f.auto && <span className="chip">{t("fwd.auto_chip")}</span>}
+                </div>
+                <div className="fwd-route">
+                  localhost:{f.local_port}
+                  <ArrowRight size={11} />
+                  {f.remote_host}:{f.remote_port}
+                </div>
+              </div>
+              <div className="fwd-actions">
+                <button type="button" className="btn ghost icon small" title={t("common.edit")} onClick={() => setEditing(i)}>
+                  <Pencil size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost icon small"
+                  title={t("common.delete")}
+                  onClick={() => {
+                    props.onChange(forwards.filter((_, j) => j !== i));
+                    setEditing(null);
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {editing !== null && (
+        <ForwardForm
+          key={editing}
+          forward={current ? { ...current, id: current.id ?? "" } : null}
+          taken={forwards.filter((_, i) => i !== editing).map((f) => f.local_port)}
+          onCancel={() => setEditing(null)}
+          onSubmit={(input) => submit({ ...input, id: current?.id ?? null })}
+        />
+      )}
+    </div>
+  );
+}
+
 export function HostPanel(props: {
   panel: NonNullable<PanelState>;
   onClose: () => void;
@@ -226,6 +305,7 @@ export function HostPanel(props: {
   const [startupId, setStartupId] = useState<Id | null>(
     saved ? saved.startupId : (editing?.startup_snippet_id ?? null),
   );
+  const [forwards, setForwards] = useState<PortForwardInput[]>(saved?.forwards ?? editing?.forwards ?? []);
   useEffect(() => {
     useUi.getState().setHostDraft({
       key: draftKey,
@@ -240,8 +320,9 @@ export function HostPanel(props: {
       keyId,
       identityId,
       startupId,
+      forwards,
     });
-  }, [draftKey, label, address, port, groupId, tags, authKind, username, password, keyId, identityId, startupId]);
+  }, [draftKey, label, address, port, groupId, tags, authKind, username, password, keyId, identityId, startupId, forwards]);
   const [busy, setBusy] = useState(false);
   const [touched, setTouched] = useState(false);
 
@@ -298,6 +379,7 @@ export function HostPanel(props: {
           ? { kind: "identity", identity_id: identityId! }
           : { kind: "inline", username, password: effectivePassword, key_id: keyId },
       startup_snippet_id: startupId,
+      forwards,
     };
     setBusy(true);
     const saved = await mutate(() => api.hostSave(input), connect ? undefined : t("host.saved"));
@@ -501,6 +583,8 @@ export function HostPanel(props: {
             </select>
           </Field>
         )}
+
+        <ForwardsSection forwards={forwards} onChange={setForwards} />
       </div>
 
       <div className="panel-foot">

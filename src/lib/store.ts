@@ -9,6 +9,7 @@ import {
   type CloseReason,
   type HostView,
   type Id,
+  type PortForwardInput,
   type Prompt,
   type SecretInput,
   type Snapshot,
@@ -250,6 +251,7 @@ export interface HostDraft {
   keyId: Id | null;
   identityId: Id | null;
   startupId: Id | null;
+  forwards: PortForwardInput[];
 }
 
 interface UiStore {

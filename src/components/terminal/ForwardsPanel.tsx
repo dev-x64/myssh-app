@@ -1,6 +1,6 @@
 import { ArrowRight, Cable, Check, Copy, Globe, Pencil, Plus, Trash2 } from "lucide-react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mutate, reportError } from "../../lib/actions";
 import { api, type ApiError, type PortForward, type PortForwardInput } from "../../lib/api";
 import { closeForward, openForward, refreshForwards, useForwards, type OpenForward } from "../../lib/forwards";
@@ -252,7 +252,11 @@ const portOf = (text: string): number | null => {
   return Number.isInteger(n) && n >= 1 && n <= 65535 ? n : null;
 };
 
-function ForwardForm(props: {
+/**
+ * Adds or changes a forward. A block, not a form: it also sits inside the
+ * host editor's form. Enter submits it, Escape cancels it.
+ */
+export function ForwardForm(props: {
   forward: PortForward | null;
   /** Ports this host's other forwards take here. */
   taken: number[];
@@ -279,8 +283,7 @@ function ForwardForm(props: {
   const privileged = LINUX && local !== null && local < 1024;
   const ready = remote !== null && local !== null && !twice && !busy;
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const submit = async () => {
     if (!ready || local === null || remote === null) return;
     setBusy(true);
     await props.onSubmit({
@@ -295,12 +298,23 @@ function ForwardForm(props: {
   };
 
   return (
-    <form className="fwd-form" onSubmit={(e) => void submit(e)}>
+    <div
+      className="fwd-form"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT" && (e.target as HTMLInputElement).type !== "checkbox") {
+          e.preventDefault();
+          void submit();
+        } else if (e.key === "Escape") {
+          e.stopPropagation();
+          props.onCancel();
+        }
+      }}
+    >
       <div className="fwd-form-label">{t("fwd.on_server")}</div>
       <div className="fwd-pair">
         <input
           ref={first}
-          className="grow"
+          className="input grow"
           value={remoteHost}
           onChange={(e) => setRemoteHost(e.target.value)}
           placeholder="localhost"
@@ -311,7 +325,7 @@ function ForwardForm(props: {
         />
         <span className="dim">:</span>
         <input
-          className="port"
+          className="input port"
           value={remotePort}
           onChange={(e) => setRemotePort(e.target.value.replace(/\D/g, ""))}
           placeholder="5432"
@@ -324,7 +338,7 @@ function ForwardForm(props: {
         <span className="fwd-fixed">localhost</span>
         <span className="dim">:</span>
         <input
-          className="port"
+          className="input port"
           value={localTouched ? localPort : remotePort}
           onChange={(e) => {
             setLocalTouched(true);
@@ -338,6 +352,7 @@ function ForwardForm(props: {
       {twice && <p className="fwd-hint bad">{t("fwd.twice")}</p>}
       {privileged && <p className="fwd-hint">{t("fwd.privileged")}</p>}
       <input
+        className="input"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         placeholder={t("fwd.label_placeholder")}
@@ -351,10 +366,10 @@ function ForwardForm(props: {
         <button type="button" className="btn small" onClick={props.onCancel}>
           {t("common.cancel")}
         </button>
-        <button type="submit" className="btn small primary" disabled={!ready}>
+        <button type="button" className="btn small primary" disabled={!ready} onClick={() => void submit()}>
           {t(f ? "common.save" : "fwd.add")}
         </button>
       </div>
-    </form>
+    </div>
   );
 }
