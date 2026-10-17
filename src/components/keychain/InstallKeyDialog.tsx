@@ -74,6 +74,9 @@ export function InstallKeyDialog(props: { keyView: KeyView; onClose: () => void 
       .sort((a, b) => hostTitle(a).localeCompare(hostTitle(b)));
   }, [snapshot, query]);
 
+  const using = hosts.filter((host) => usesKey(host, key, snapshot.identities));
+  const fresh = hosts.filter((host) => !usesKey(host, key, snapshot.identities));
+
   const toggle = (id: Id) =>
     setChosen((set) => {
       const next = new Set(set);
@@ -208,6 +211,16 @@ export function InstallKeyDialog(props: { keyView: KeyView; onClose: () => void 
 
   const title = t("install.title", { name: key.label || key.algorithm });
 
+  const pick = (host: HostView) => (
+    <label key={host.id} className="install-pick">
+      <input type="checkbox" checked={chosen.has(host.id)} onChange={() => toggle(host.id)} />
+      <span className="install-main">
+        <span className="install-host">{hostTitle(host)}</span>
+        <span className="install-text">{hostSubtitle(host, snapshot)}</span>
+      </span>
+    </label>
+  );
+
   return (
     <>
       <Modal
@@ -303,18 +316,16 @@ export function InstallKeyDialog(props: { keyView: KeyView; onClose: () => void 
                   </button>
                 </div>
                 <div className="install-hosts scroll">
-                  {hosts.map((host) => (
-                    <label key={host.id} className="install-pick">
-                      <input type="checkbox" checked={chosen.has(host.id)} onChange={() => toggle(host.id)} />
-                      <span className="install-main">
-                        <span className="install-host">{hostTitle(host)}</span>
-                        <span className="install-text">
-                          {hostSubtitle(host, snapshot)}
-                          {usesKey(host, key, snapshot.identities) && ` · ${t("install.uses_key")}`}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
+                  {/* The hosts that already use the key come last, apart: they rarely need it again. */}
+                  {fresh.length > 0 && using.length > 0 && (
+                    <div className="install-group">{t("install.group.fresh", { n: fresh.length })}</div>
+                  )}
+                  {fresh.map(pick)}
+                  {using.length > 0 && (
+                    <div className="install-group">{t("install.group.using", { n: using.length })}</div>
+                  )}
+                  {using.map(pick)}
+                  {hosts.length === 0 && <div className="install-group none">{t("install.found_none")}</div>}
                 </div>
                 <label className="check">
                   <input type="checkbox" checked={assign} onChange={(e) => setAssign(e.target.checked)} />

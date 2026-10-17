@@ -1,5 +1,6 @@
 import {
   Check,
+  ChevronDown,
   Cloud,
   Copy,
   FileKey2,
@@ -15,10 +16,11 @@ import {
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useMemo, useState } from "react";
 import { mutate } from "../../lib/actions";
-import { api, type IdentityView, type KeyView, type Snapshot } from "../../lib/api";
+import { api, type HostView, type IdentityView, type KeyView, type Snapshot } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { KeySyncDialog } from "./KeySyncDialog";
-import { useUi, useVault } from "../../lib/store";
+import { hostTitle, useUi, useVault } from "../../lib/store";
+import { OsIcon } from "../hosts/OsIcon";
 import { Confirm, Empty } from "../ui";
 import { IdentityDialog } from "./IdentityDialog";
 import { InstallKeyDialog } from "./InstallKeyDialog";
@@ -36,19 +38,32 @@ type Dialog =
   | { kind: "delete-identity"; identity: IdentityView }
   | null;
 
-/** How many hosts end up using each key, directly or through an identity. */
-function keyUsage(snapshot: Snapshot): Map<string, number> {
-  const usage = new Map<string, number>();
+/** A host that uses a key, and the identity it does so through, if any. */
+interface KeyUser {
+  host: HostView;
+  identity: IdentityView | null;
+}
+
+/** The hosts that end up using each key, directly or through an identity, by name. */
+function keyUsage(snapshot: Snapshot): Map<string, KeyUser[]> {
+  const usage = new Map<string, KeyUser[]>();
   for (const host of snapshot.hosts) {
-    const keyId =
-      host.auth.kind === "inline"
-        ? host.auth.key_id
-        : (snapshot.identities.find(
-            (i) => host.auth.kind === "identity" && i.id === host.auth.identity_id,
-          )?.key_id ?? null);
-    if (keyId) usage.set(keyId, (usage.get(keyId) ?? 0) + 1);
+    const identity =
+      host.auth.kind === "identity"
+        ? (snapshot.identities.find((i) => host.auth.kind === "identity" && i.id === host.auth.identity_id) ?? null)
+        : null;
+    const keyId = host.auth.kind === "inline" ? host.auth.key_id : (identity?.key_id ?? null);
+    if (keyId) usage.set(keyId, [...(usage.get(keyId) ?? []), { host, identity }]);
   }
+  for (const users of usage.values()) users.sort((a, b) => hostTitle(a.host).localeCompare(hostTitle(b.host)));
   return usage;
+}
+
+/** The host's settings, on the hosts page. */
+function editHost(hostId: string) {
+  const ui = useUi.getState();
+  ui.goHome("hosts");
+  ui.setHostPanel({ mode: "edit", hostId });
 }
 
 export function KeychainView() {
@@ -58,6 +73,15 @@ export function KeychainView() {
   const toast = useUi((s) => s.toast);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  /** The keys whose hosts are listed under them. */
+  const [shown, setShown] = useState<Set<string>>(new Set());
+  const toggleShown = (id: string) =>
+    setShown((set) => {
+      const next = new Set(set);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const usage = useMemo(() => keyUsage(snapshot), [snapshot]);
   const identityUsage = (identity: IdentityView) =>
@@ -110,7 +134,8 @@ export function KeychainView() {
         ) : (
           <div className="list">
             {snapshot.keys.map((key) => {
-              const used = usage.get(key.id) ?? 0;
+              const users = usage.get(key.id) ?? [];
+              const open = shown.has(key.id) && users.length > 0;
               return (
                 <div key={key.id} className="item">
                   <span className="card-icon accent">
@@ -145,8 +170,42 @@ export function KeychainView() {
                     <div className="item-sub">
                       {t(key.origin === "generated" ? "key.origin.generated" : "key.origin.imported")}
                       {" · "}
-                      {used > 0 ? t("key.used_by", { n: used }) : t("key.unused")}
+                      {users.length > 0 ? (
+                        <button
+                          type="button"
+                          className="link-btn"
+                          aria-expanded={open}
+                          title={t(open ? "key.hosts.hide" : "key.hosts.show")}
+                          onClick={() => toggleShown(key.id)}
+                        >
+                          {t("key.used_by", { n: users.length })}
+                          <ChevronDown size={12} />
+                        </button>
+                      ) : (
+                        t("key.unused")
+                      )}
                     </div>
+                    {open && (
+                      <div className="key-hosts">
+                        {users.map(({ host, identity }) => (
+                          <button
+                            key={host.id}
+                            type="button"
+                            className="key-host"
+                            title={t("key.hosts.edit")}
+                            onClick={() => editHost(host.id)}
+                          >
+                            <OsIcon os={host.os} size={13} />
+                            <span className="name">{hostTitle(host)}</span>
+                            {identity && (
+                              <span className="via">
+                                {t("key.hosts.via", { name: identity.label || identity.username })}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="item-actions">
                     <button className="btn small" onClick={() => void copyPublic(key)}>
@@ -276,7 +335,11 @@ export function KeychainView() {
         (keyReferences(dialog.key) > 0 ? (
           <Confirm
             title={t("key.delete.title")}
-            text={`${t("error.in_use")}: ${t("key.used_by", { n: usage.get(dialog.key.id) ?? keyReferences(dialog.key) })}.`}
+            text={(() => {
+              const users = usage.get(dialog.key.id) ?? [];
+              const names = users.map(({ host }) => hostTitle(host)).join(", ");
+              return `${t("error.in_use")}: ${t("key.used_by", { n: users.length || keyReferences(dialog.key) })}${names ? ` — ${names}` : ""}.`;
+            })()}
             confirmLabel={t("common.close")}
             onClose={() => setDialog(null)}
             onConfirm={() => setDialog(null)}

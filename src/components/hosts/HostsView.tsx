@@ -26,6 +26,7 @@ import { GroupDialog } from "./GroupDialog";
 import { HostLoad, OnlineDot } from "./HostLoad";
 import { HostPanel } from "./HostPanel";
 import { ImportDialog } from "./ImportDialog";
+import { KeyBadge } from "./KeyBadge";
 import { TailscaleBadge } from "./TailscaleBadge";
 import { watchTailscale } from "../../lib/tailscale";
 import { Tip } from "../Tip";
@@ -396,6 +397,7 @@ export function HostsView() {
                         {host.pinned && <Pin size={12} className="card-pin" aria-label={t("hosts.pinned")} />}
                         {hostTitle(host)}
                         <TailscaleBadge host={host} />
+                        <KeyBadge host={host} />
                       </div>
                       <div className="card-sub">{hostSubtitle(host, snapshot)}</div>
                       {host.os && <div className="card-sub card-os">{host.os.name}</div>}
