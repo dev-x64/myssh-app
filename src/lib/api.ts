@@ -128,6 +128,8 @@ export interface FoundHost {
   key_file: string | null;
   password: string | null;
   tags: string[];
+  /** Ports it forwards there (`LocalForward`). */
+  forwards?: { local_port: number; remote_host: string; remote_port: number }[];
 }
 
 /** A machine of the tailnet, as Tailscale on this computer knows it. */

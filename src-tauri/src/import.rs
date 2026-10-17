@@ -503,7 +503,19 @@ pub async fn import_apply(state: State<'_, AppState>, hosts: Vec<FoundHost>) -> 
                     key_id: host.key_file.and_then(|f| key_ids.get(&f).copied()),
                 },
                 startup_snippet_id: None,
-                forwards: None,
+                forwards: (!host.forwards.is_empty()).then(|| {
+                    host.forwards
+                        .into_iter()
+                        .map(|f| myssh_core::model::PortForwardInput {
+                            id: None,
+                            label: String::new(),
+                            local_port: f.local_port,
+                            remote_host: f.remote_host,
+                            remote_port: f.remote_port,
+                            auto: false,
+                        })
+                        .collect()
+                }),
             })?;
             report.hosts += 1;
         }

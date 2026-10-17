@@ -29,6 +29,44 @@ pub struct FoundHost {
     /// Tags for the host, such as `tailscale` for a machine of a tailnet.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Ports the other app forwards through the host (`LocalForward`).
+    #[serde(default)]
+    pub forwards: Vec<FoundForward>,
+}
+
+/// A forwarded port found in another app's settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FoundForward {
+    pub local_port: u16,
+    pub remote_host: String,
+    pub remote_port: u16,
+}
+
+/// Reads the two halves of an OpenSSH `LocalForward` line: `[bind:]port`
+/// and `host:port` (or `host/port`, and `[v6]:port`). A forward of a Unix
+/// socket is left out. The port is opened on this computer only, whatever
+/// address the line binds it to.
+pub fn parse_local_forward(value: &str) -> Option<FoundForward> {
+    fn split(part: &str) -> Option<(&str, &str)> {
+        if let Some(rest) = part.strip_prefix('[') {
+            let (host, port) = rest.split_once(']')?;
+            return Some((host, port.strip_prefix(':')?));
+        }
+        part.rsplit_once(':').or_else(|| part.rsplit_once('/'))
+    }
+    let mut words = value.split_whitespace();
+    let (listen, target) = (words.next()?, words.next()?);
+    let local = match split(listen) {
+        Some((_, port)) => port,
+        None => listen,
+    };
+    let (host, port) = split(target)?;
+    let local_port = local.parse().ok().filter(|p| *p != 0)?;
+    let remote_port = port.parse().ok().filter(|p| *p != 0)?;
+    if host.is_empty() || host.starts_with('/') {
+        return None;
+    }
+    Some(FoundForward { local_port, remote_host: host.to_string(), remote_port })
 }
 
 /// The other apps the import knows.
@@ -102,6 +140,8 @@ pub fn parse_ssh_config(text: &str, include: &dyn Fn(&str) -> Option<Vec<String>
         names: Vec<String>,
         pattern: bool,
         options: BTreeMap<String, String>,
+        /// `LocalForward` may be given many times; each adds a forward.
+        forwards: Vec<String>,
     }
     fn read(text: &str, include: &dyn Fn(&str) -> Option<Vec<String>>, blocks: &mut Vec<Block>, depth: usize) {
         for line in text.lines() {
@@ -120,10 +160,10 @@ pub fn parse_ssh_config(text: &str, include: &dyn Fn(&str) -> Option<Vec<String>
                 "host" => {
                     let words: Vec<String> = value.split_whitespace().map(str::to_string).collect();
                     let pattern = words.iter().any(|w| w.contains(['*', '?', '!']));
-                    blocks.push(Block { names: words, pattern, options: BTreeMap::new() });
+                    blocks.push(Block { names: words, pattern, ..Block::default() });
                 }
                 // A `Match` block applies by conditions this cannot weigh; its options are left out.
-                "match" => blocks.push(Block { names: Vec::new(), pattern: true, options: BTreeMap::new() }),
+                "match" => blocks.push(Block { pattern: true, ..Block::default() }),
                 "include" if depth < 5 => {
                     for path in value.split_whitespace() {
                         for text in include(path).unwrap_or_default() {
@@ -134,7 +174,11 @@ pub fn parse_ssh_config(text: &str, include: &dyn Fn(&str) -> Option<Vec<String>
                 _ => {
                     if blocks.is_empty() {
                         // Options before any `Host` line apply to every host.
-                        blocks.push(Block { names: vec!["*".into()], pattern: true, options: BTreeMap::new() });
+                        blocks.push(Block { names: vec!["*".into()], pattern: true, ..Block::default() });
+                    }
+                    if key == "localforward" {
+                        blocks.last_mut().unwrap().forwards.push(value);
+                        continue;
                     }
                     // The first value given wins, as in ssh itself.
                     blocks.last_mut().unwrap().options.entry(key).or_insert(value);
@@ -150,10 +194,24 @@ pub fn parse_ssh_config(text: &str, include: &dyn Fn(&str) -> Option<Vec<String>
         .filter(|b| b.names.iter().any(|n| n == "*") && b.names.len() == 1)
         .flat_map(|b| b.options.clone())
         .collect();
+    let everyones_forwards: Vec<&String> = blocks
+        .iter()
+        .filter(|b| b.names.iter().any(|n| n == "*") && b.names.len() == 1)
+        .flat_map(|b| &b.forwards)
+        .collect();
 
     let mut hosts = Vec::new();
     for block in blocks.iter().filter(|b| !b.pattern) {
         let option = |key: &str| block.options.get(key).or_else(|| everyone.get(key)).cloned();
+        // As in ssh, a port is forwarded once: the first line for it wins.
+        let mut forwards: Vec<FoundForward> = Vec::new();
+        for line in block.forwards.iter().chain(everyones_forwards.iter().copied()) {
+            if let Some(f) = parse_local_forward(line) {
+                if !forwards.iter().any(|known| known.local_port == f.local_port) {
+                    forwards.push(f);
+                }
+            }
+        }
         for name in &block.names {
             let address = option("hostname").unwrap_or_else(|| name.clone()).replace("%h", name);
             hosts.push(FoundHost {
@@ -165,6 +223,7 @@ pub fn parse_ssh_config(text: &str, include: &dyn Fn(&str) -> Option<Vec<String>
                 key_file: option("identityfile").filter(|f| !f.eq_ignore_ascii_case("none")),
                 password: None,
                 tags: Vec::new(),
+                forwards: forwards.clone(),
             });
         }
     }
@@ -222,6 +281,7 @@ pub fn parse_mobaxterm(ini: &Ini) -> Vec<FoundHost> {
                 key_file: fields.get(14).map(|f| moba_unescape(f.trim())).filter(|f| !f.is_empty()),
                 password: None,
                 tags: Vec::new(),
+                forwards: Vec::new(),
             });
         }
     }
@@ -279,6 +339,7 @@ pub fn parse_putty(sessions: &[(String, BTreeMap<String, String>)]) -> Vec<Found
             key_file: get("PublicKeyFile"),
             password: None,
             tags: Vec::new(),
+            forwards: Vec::new(),
         });
     }
     hosts
@@ -316,6 +377,7 @@ pub fn parse_winscp(ini: &Ini) -> Vec<FoundHost> {
             key_file: get("PublicKeyFile").map(|f| percent_decode(&f)),
             password: None,
             tags: Vec::new(),
+            forwards: Vec::new(),
         });
     }
     hosts
@@ -406,6 +468,7 @@ pub fn parse_filezilla(text: &str) -> Vec<FoundHost> {
                                     key_file: get("Keyfile"),
                                     password: get("Pass"),
                                     tags: Vec::new(),
+                                    forwards: Vec::new(),
                                 });
                             }
                         }
@@ -455,6 +518,7 @@ pub fn parse_tailscale(text: &str) -> Vec<FoundHost> {
                 key_file: None,
                 password: None,
                 tags: vec!["tailscale".into()],
+                forwards: Vec::new(),
             })
         })
         .collect();
@@ -474,6 +538,10 @@ Host web prod-web
   HostName 10.0.0.5
   User deploy
   IdentityFile ~/.ssh/deploy_ed25519
+  LocalForward 5432 localhost:5432
+  LocalForward 127.0.0.1:8080 [fd00::1]:80
+  LocalForward 5432 elsewhere:1
+  LocalForward /tmp/sock /run/app.sock
 
 Host db
   HostName=db.example.com
@@ -504,6 +572,15 @@ Host *
         assert_eq!(hosts[2].username, "root");
         assert_eq!(hosts[2].key_file.as_deref(), Some("~/.ssh/id_ed25519"));
         assert_eq!(hosts[3].port, 32222);
+        // Forwarded ports, each once, whatever address they were bound to.
+        let forward = |local_port, host: &str, remote_port| FoundForward { local_port, remote_host: host.into(), remote_port };
+        assert_eq!(hosts[0].forwards, [forward(5432, "localhost", 5432), forward(8080, "fd00::1", 80)]);
+        assert_eq!(hosts[1].forwards, hosts[0].forwards);
+        assert!(hosts[2].forwards.is_empty());
+        assert_eq!(parse_local_forward("3000 web/3000"), Some(forward(3000, "web", 3000)));
+        assert_eq!(parse_local_forward("[::1]:9000 localhost:9000"), Some(forward(9000, "localhost", 9000)));
+        assert_eq!(parse_local_forward("0 localhost:1"), None);
+        assert_eq!(parse_local_forward("5432"), None);
     }
 
     #[test]
