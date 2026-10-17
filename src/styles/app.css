@@ -485,6 +485,25 @@ html[data-platform="linux"] .titlebar {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
+}
+
+/* With a panel open beside it, a page's secondary buttons keep their icon
+   and give their words to the search. */
+@container (max-width: 760px) {
+  .page-head .btn:not(.primary) .btn-label {
+    display: none;
+  }
+}
+
+.page-head .search {
+  min-width: 180px;
+}
+
+.row > .field-label.nowrap {
+  flex: 1 0 auto;
+  min-width: auto;
+  white-space: nowrap;
 }
 
 .page-head {
@@ -6298,7 +6317,7 @@ html[data-theme="light"] .welcome-glow i:last-child {
 }
 
 .theme-grid.small {
-  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
   gap: 7px;
 }
 

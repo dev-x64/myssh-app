@@ -400,8 +400,8 @@ export function HostPanel(props: {
         </Field>
 
         <div className="group-box">
-          <div className="row" style={{ alignItems: "center" }}>
-            <span className="field-label grow">{t("host.credentials")}</span>
+          <div className="row" style={{ alignItems: "center", flexWrap: "wrap" }}>
+            <span className="field-label grow nowrap">{t("host.credentials")}</span>
             <Segmented
               value={authKind}
               onChange={setAuthKind}

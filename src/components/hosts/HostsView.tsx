@@ -255,11 +255,11 @@ export function HostsView() {
           <div className="grow" />
           <button className="btn" title={t("import.button.hint")} onClick={() => setDialog({ kind: "import" })}>
             <Download size={15} />
-            {t("import.button")}
+            <span className="btn-label">{t("import.button")}</span>
           </button>
-          <button className="btn" onClick={() => setDialog({ kind: "group", group: null })}>
+          <button className="btn" title={t("hosts.new_group")} onClick={() => setDialog({ kind: "group", group: null })}>
             <FolderPlus size={15} />
-            {t("hosts.new_group")}
+            <span className="btn-label">{t("hosts.new_group")}</span>
           </button>
           <button className="btn primary" onClick={() => setPanel({ mode: "new", groupId })}>
             <Plus size={15} />
