@@ -202,7 +202,7 @@ export function createHandler(scenario: Scenario) {
       return host;
     },
     host_password: () => "preview-password",
-    identity_password: () => "preview-password",
+    identity_password: ({ id }) => (id === "i-deploy" ? "old-deploy-password" : "preview-password"),
     host_shared_credentials: () => ({ hosts: [], identity: null }),
     host_gather_credentials: ({ id, label }) => {
       const host = hostById(id);

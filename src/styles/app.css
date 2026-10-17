@@ -1954,6 +1954,7 @@ button.link {
 /* The saved passwords, offered under the prompt that asks for one. */
 .password-offer {
   min-width: 260px;
+  max-width: min(380px, calc(100% - 12px));
   animation: password-offer-in 0.14s ease-out;
 }
 
@@ -1962,6 +1963,53 @@ button.link {
   color: var(--accent);
   font-family: var(--font-ui);
   font-style: normal;
+}
+
+.password-offer .suggest-detail em.worked {
+  color: var(--ok);
+}
+
+.password-offer .suggest-detail em.failed {
+  color: var(--danger);
+}
+
+.password-generate .suggest-icon {
+  color: var(--accent);
+}
+
+/* The saved one just typed and refused: said above the list. */
+.password-refused {
+  margin: 0 0 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--danger-soft);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.password-leaving {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+/* A new password, made up and taken: shown once, to be kept. */
+.password-made {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-2);
+}
+
+.password-made code {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.02em;
 }
 
 .password-add .suggest-text {

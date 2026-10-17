@@ -129,6 +129,8 @@ export interface Settings {
   tips: boolean;
   /** The tips already understood. */
   tipsSeen: string[];
+  /** Per host and account: the saved password taken there last, and those refused. Never synced. */
+  passwordsUsed: Record<string, { worked?: string; failed?: string[] }>;
 }
 
 interface SettingsStore extends Settings {
@@ -181,6 +183,7 @@ export const useSettings = create<SettingsStore>()(
       statsBar: true,
       tips: true,
       tipsSeen: [],
+      passwordsUsed: {},
       set: (patch) => set(patch),
       bumpFontSize: (delta) =>
         set((s) => ({

@@ -8,31 +8,27 @@ import {
   File,
   Folder,
   History,
-  Plus,
-  Server,
   Sparkles,
   SpellCheck,
   SquareTerminal,
-  UserRound,
   WandSparkles,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { errorText, useT, type MessageKey } from "../../lib/i18n";
-import { api } from "../../lib/api";
-import { closeTab, getSession, passwordChoices } from "../../lib/sessions";
+import { closeTab, getSession } from "../../lib/sessions";
 import { isDark, useSettings } from "../../lib/settings";
 import { useShare } from "../../lib/share";
 import { isLocalTab, useUi, useVault, type Suggestion, type Tab } from "../../lib/store";
 import { resolveTermTheme } from "../../lib/themes";
 import { cx } from "../ui";
-import { IdentityDialog } from "../keychain/IdentityDialog";
 import { ConnectScreen, FailedAttempt } from "./ConnectScreen";
 import { CursorBadge, personTone } from "./CursorBadge";
 import { ExternalConflict } from "./ExternalConflict";
 import { FileEditor } from "./FileEditor";
 import { FileManager } from "./FileManager";
+import { PasswordOffer, PasswordSave } from "./PasswordOffer";
 import { PromptDialog } from "./PromptDialog";
 import { ShareBar } from "./SharePanel";
 import { LocalIntro } from "./LocalIntro";
@@ -152,107 +148,6 @@ const SUGGEST_ICONS: Record<Suggestion["kind"], LucideIcon> = {
 };
 
 /** Suggestions for the command being typed, anchored under the cursor. */
-/**
- * The shell asks for a password (su, sudo, passwd, ssh onwards…): the
- * saved ones are listed under the prompt, this host's first, with adding
- * one at the end. One is typed only when chosen, with a click or the arrows
- * and Enter; typing on puts the list away, and so does Escape.
- */
-function PasswordOffer({ tab }: { tab: Tab }) {
-  const t = useT();
-  const session = getSession(tab.id);
-  const ref = useRef<HTMLDivElement>(null);
-  const [place, setPlace] = useState<React.CSSProperties>({ visibility: "hidden" });
-  const offer = tab.passwordOffer;
-  // Read again when the vault changes: a password saved elsewhere shows up here.
-  useVault((s) => s.snapshot);
-  const choices = offer ? passwordChoices(tab.hostId, offer.user) : [];
-
-  useLayoutEffect(() => {
-    const list = ref.current;
-    const wrap = list?.parentElement;
-    const screen = wrap?.querySelector<HTMLElement>(".xterm-screen");
-    if (!list || !wrap || !screen || !session || !offer) return;
-    const origin = wrap.getBoundingClientRect();
-    const area = screen.getBoundingClientRect();
-    const cellWidth = area.width / session.term.cols;
-    const cellHeight = area.height / session.term.rows;
-    const left = Math.max(6, Math.min(area.left - origin.left + offer.col * cellWidth, origin.width - list.offsetWidth - 6));
-    const below = area.top - origin.top + (offer.row + 1) * cellHeight + 2;
-    if (below + list.offsetHeight > origin.height - 4) {
-      setPlace({ left, bottom: origin.height - (area.top - origin.top + offer.row * cellHeight - 2) });
-    } else {
-      setPlace({ left, top: below });
-    }
-  }, [session, offer, choices.length]);
-
-  if (!session || !offer) return null;
-  const row = (index: number) => ({
-    role: "option",
-    "aria-selected": index === offer.index,
-    // Keep the terminal focused: act on press, not on click.
-    onMouseDown: (e: React.MouseEvent) => {
-      e.preventDefault();
-      session.choosePassword(index);
-    },
-  });
-  return (
-    <div ref={ref} className="suggest password-offer" style={place} role="listbox" aria-label={t("term.password.title")}>
-      <div className="suggest-list">
-        {choices.map((choice, index) => (
-          <div key={choice.key} className={cx("suggest-item", index === offer.index && "active")} {...row(index)}>
-            <div className="suggest-line">
-              {choice.key.startsWith("host:") ? (
-                <Server size={13} className="suggest-icon" />
-              ) : (
-                <UserRound size={13} className="suggest-icon" />
-              )}
-              <span className="suggest-text">{choice.label}</span>
-              <span className="suggest-detail">
-                {choice.label === choice.username ? "" : choice.username}
-                {choice.own && <em>{t("term.password.this_host")}</em>}
-              </span>
-            </div>
-          </div>
-        ))}
-        <div
-          className={cx("suggest-item password-add", offer.index === choices.length && "active")}
-          {...row(choices.length)}
-        >
-          <div className="suggest-line">
-            <Plus size={13} className="suggest-icon" />
-            <span className="suggest-text">
-              {offer.user ? t("term.password.add_for", { user: offer.user }) : t("term.password.add")}
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className="suggest-hint">{t(choices.length ? "term.password.hint" : "term.password.hint_none")}</div>
-    </div>
-  );
-}
-
-/** Saving a password asked for in the terminal; once saved, it is typed at the prompt. */
-function PasswordAdd({ tab }: { tab: Tab }) {
-  const session = getSession(tab.id);
-  const adding = tab.passwordAdd;
-  if (!session || !adding) return null;
-  const close = () => {
-    useUi.getState().patchTab(tab.id, { passwordAdd: null });
-    session.focus();
-  };
-  return (
-    <IdentityDialog
-      identity={null}
-      onClose={close}
-      forPrompt={{
-        username: adding.username,
-        onSaved: (identity) => void session.typePassword(() => api.identityPassword(identity.id)),
-      }}
-    />
-  );
-}
-
 function SuggestList({ tab }: { tab: Tab }) {
   const t = useT();
   const session = getSession(tab.id);
@@ -549,7 +444,7 @@ export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
           <div className="term-host" ref={hostRef} onContextMenu={(e) => e.preventDefault()} />
           {tab.suggest && active && <SuggestList tab={tab} />}
           {tab.passwordOffer && active && !tab.suggest && <PasswordOffer tab={tab} />}
-          {tab.passwordAdd && <PasswordAdd tab={tab} />}
+          {tab.passwordSave && <PasswordSave key={JSON.stringify(tab.passwordSave)} tab={tab} />}
           {typist && <CursorBadge term={session.term} name={typist.name} tone={typist.tone} />}
         </div>
         {tab.side === "snippets" && <SnippetsPanel tab={tab} />}

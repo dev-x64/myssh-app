@@ -15,8 +15,8 @@ interface Session {
   /** A prompt waiting for an answer: what to do once it comes. */
   waiting: ((reply: PromptReply) => void) | null;
   closed: boolean;
-  /** `su` asked for a password: what is typed is not echoed, and Enter checks it. */
-  secret: boolean;
+  /** A password is being asked for (su, sudo, passwd): what is typed is not echoed, and Enter answers it. */
+  secret: null | { kind: "su" } | { kind: "sudo"; tries: number; command: string } | { kind: "new" } | { kind: "again"; first: string };
   /** Became root with `su`. */
   root: boolean;
 }
@@ -74,8 +74,18 @@ function run(session: Session, command: string) {
   }
   if (trimmed === "su" || trimmed === "su root" || trimmed === "su -") {
     // Asks for the password as su does; the one the preview keeps opens it.
-    session.secret = true;
+    session.secret = { kind: "su" };
     write(session, "Password: ");
+    return;
+  }
+  if (trimmed.startsWith("sudo ") && !session.root) {
+    session.secret = { kind: "sudo", tries: 0, command: trimmed.slice(5) };
+    write(session, `[sudo] password for ${user(session)}: `);
+    return;
+  }
+  if (trimmed === "passwd") {
+    session.secret = { kind: "new" };
+    write(session, "New password: ");
     return;
   }
   if (trimmed === "clear") {
@@ -167,7 +177,7 @@ export function open(
     cwd: host.auth.kind === "inline" && host.auth.username !== "root" ? `/home/${host.auth.username}` : "/root",
     waiting: null,
     closed: false,
-    secret: false,
+    secret: null,
     root: false,
   };
   sessions.set(id, session);
@@ -206,14 +216,30 @@ export function input(id: number, data: string) {
       write(session, "\r\n");
       const line = session.line;
       session.line = "";
-      if (session.secret) {
-        session.secret = false;
+      const secret = session.secret;
+      session.secret = null;
+      if (!secret) run(session, line);
+      else if (secret.kind === "su") {
         if (line === "preview-password") {
           session.root = true;
           session.cwd = "/root";
         } else write(session, "su: Authentication failure\r\n");
         prompt(session);
-      } else run(session, line);
+      } else if (secret.kind === "sudo") {
+        if (line === "preview-password") return run(session, secret.command);
+        if (secret.tries >= 2) {
+          write(session, "sudo: 3 incorrect password attempts\r\n");
+          return prompt(session);
+        }
+        session.secret = { ...secret, tries: secret.tries + 1 };
+        write(session, `Sorry, try again.\r\n[sudo] password for ${user(session)}: `);
+      } else if (secret.kind === "new") {
+        session.secret = { kind: "again", first: line };
+        write(session, "Retype new password: ");
+      } else {
+        write(session, line === secret.first ? "passwd: password updated successfully\r\n" : "Sorry, passwords do not match.\r\npasswd: Authentication token manipulation error\r\npasswd: password unchanged\r\n");
+        prompt(session);
+      }
     } else if (ch === "\x7f" || ch === "\b") {
       if (session.line) {
         session.line = session.line.slice(0, -1);
