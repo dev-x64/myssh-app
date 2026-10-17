@@ -147,7 +147,7 @@ export function ForwardsView() {
                 {t("fwd.title")}
                 <span className="dim">{shown.length}</span>
               </div>
-              <div className="grid">
+              <div className="grid fwd-grid">
                 {shown.map((entry) => {
                   const tab = tabOf(tabs, forwardTabs, entry);
                   const state = tab ? forwardTabs[tab.id]?.open[entry.forward.id] : undefined;

@@ -4753,6 +4753,11 @@ html[data-theme="light"] .welcome-glow i:last-child {
   display: none;
 }
 
+/* A forward's card needs room for its route beside Open and Stop. */
+.grid.fwd-grid {
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+}
+
 .fwd-icon.up {
   background: color-mix(in srgb, var(--ok) 16%, transparent);
   color: var(--ok);
