@@ -7496,7 +7496,7 @@ html[data-theme="light"] .welcome-glow i:last-child {
 .tip-title {
   grid-area: title;
   align-self: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -7511,8 +7511,12 @@ html[data-theme="light"] .welcome-glow i:last-child {
 .tip-text {
   max-width: 72ch;
   color: var(--text-2);
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.tip-actions .btn {
+  font-size: 13px;
 }
 
 .tip-actions {
