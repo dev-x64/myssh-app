@@ -229,6 +229,15 @@ export function close(id: number) {
   sessions.delete(id);
 }
 
+/** The link dropped under the session: it ends as lost, as a dead connection does. */
+export function lose(id: number) {
+  const session = sessions.get(id);
+  if (!session) return;
+  session.events.onmessage({ type: "closed", reason: "lost", exit_status: null, error: null });
+  session.closed = true;
+  sessions.delete(id);
+}
+
 export function closeAll() {
   for (const id of [...sessions.keys()]) close(id);
 }

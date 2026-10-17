@@ -324,6 +324,7 @@ function ClosedBar({ tab }: { tab: Tab }) {
 
   let detail: React.ReactNode = t("term.enter_hint");
   if (!hostExists) detail = t("term.host_missing");
+  else if (tab.reconnect?.network) detail = t("term.reconnect.network");
   else if (tab.reconnect) detail = <Countdown at={tab.reconnect.at} attempt={tab.reconnect.attempt} />;
   else if (tab.gaveUp) detail = t("term.reconnect.gave_up", { n: tab.gaveUp });
   else if (closed.error) {

@@ -397,7 +397,7 @@ function TitleBar() {
             }}
             onContextMenu={(e) => tabMenu(e, tab)}
           >
-            <span className={cx("dot", tab.status)} />
+            <span className={cx("dot", tab.status, tab.checking && "checking", tab.reconnect && "waiting")} />
             <span className="tab-title">{tab.title}</span>
             <ShareMark tabId={tab.id} />
             <button

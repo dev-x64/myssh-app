@@ -127,7 +127,9 @@ export interface Tab {
   /** The tab has had a working session; until then it shows the connection screen. */
   everConnected: boolean;
   /** A scheduled automatic reconnection. */
-  reconnect: { attempt: number; at: number } | null;
+  reconnect: { attempt: number; at: number; network?: boolean } | null;
+  /** The connection is being asked whether it still answers (the network changed). */
+  checking?: boolean;
   /** Automatic reconnection gave up after this many attempts. */
   gaveUp: number | null;
   searchOpen: boolean;

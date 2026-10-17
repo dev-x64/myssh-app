@@ -12,6 +12,7 @@ import { Terminal } from "@xterm/xterm";
 import { api, asApiError, type Id, type PromptReply, type SessionEvent } from "./api";
 import { forgetTab } from "./external";
 import { forgetForwards, forwardsClosed, forwardsConnected } from "./forwards";
+import { onNetworkChange, useNetwork } from "./network";
 import { Highlighter, type HighlightColors } from "./highlight";
 import { t } from "./i18n";
 import { LINUX, WINDOWS } from "./platform";
@@ -414,6 +415,11 @@ export class TermSession {
   }
 
   private scheduleReconnect() {
+    // Without a network every attempt would fail: wait for one instead.
+    if (!useNetwork.getState().online) {
+      this.patch({ reconnect: { attempt: this.reconnectAttempt + 1, at: 0, network: true } });
+      return;
+    }
     if (this.reconnectAttempt >= RECONNECT_DELAYS.length) {
       this.patch({ reconnect: null, gaveUp: this.reconnectAttempt });
       this.reconnectAttempt = 0;
@@ -428,6 +434,29 @@ export class TermSession {
   private clearReconnectTimer() {
     window.clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
+  }
+
+  /**
+   * The network changed under the session: a connected one is asked whether
+   * it still answers (one that does not ends as lost and reconnects), and
+   * one waiting for a network reconnects as soon as there is one.
+   */
+  networkChanged(online: boolean) {
+    const tab = this.tab();
+    if (!tab || this.disposed) return;
+    if (tab.status === "connected" && this.sessionId !== null) {
+      const id = this.sessionId;
+      const generation = this.generation;
+      this.patch({ checking: true });
+      void api
+        .sessionCheck(id)
+        .catch(() => false)
+        .finally(() => {
+          if (generation === this.generation) this.patch({ checking: false });
+        });
+    } else if (online && tab.reconnect?.network) {
+      this.reconnect();
+    }
   }
 
   /** Reconnects now, on the user's request. */
@@ -652,6 +681,13 @@ export class TermSession {
 }
 
 const sessions = new Map<string, TermSession>();
+
+// Every server's session hears when the network changes under it.
+onNetworkChange((change) => {
+  for (const [, session] of sessions) {
+    if (session.hostId !== LOCAL_HOST_ID) session.networkChanged(change !== "offline");
+  }
+});
 let tabSeq = 1;
 
 export function getSession(tabId: string): TermSession | undefined {

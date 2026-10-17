@@ -31,6 +31,11 @@ import * as shell from "./shell";
 type Args = Record<string, unknown>;
 
 const later = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The preview's own idea of the network, from the window's online and offline events.
+let navigatorOffline = !navigator.onLine;
+window.addEventListener("offline", () => (navigatorOffline = true));
+window.addEventListener("online", () => (navigatorOffline = false));
 const stamp = () => Math.floor(Date.now() / 1000);
 const newId = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -496,6 +501,15 @@ export function createHandler(scenario: Scenario) {
     session_resize: () => undefined,
     session_ack: () => undefined,
     session_close: ({ id }) => shell.close(Number(id)),
+    // The network as the window last heard of it: gone, a check finds the link dead.
+    session_check: async ({ id }) => {
+      await later(900);
+      if (navigatorOffline) {
+        shell.lose(Number(id));
+        return false;
+      }
+      return true;
+    },
     session_close_all: () => shell.closeAll(),
     forward_start: async ({ id, forwardId, target }) => {
       await later(250);

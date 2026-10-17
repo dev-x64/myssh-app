@@ -642,6 +642,8 @@ export const api = {
     output: Channel<ArrayBuffer>,
   ) => invoke<number>("session_open", { hostId, cols, rows, runStartup, events, output }),
   sessionCwd: (id: number) => invoke<string | null>("session_cwd", { id }),
+  /** Whether the connection still answers; one that does not is ended as lost. */
+  sessionCheck: (id: number) => invoke<boolean>("session_check", { id }),
   sessionShell: (id: number) => invoke<string | null>("session_shell", { id }),
   sessionStats: (id: number) => invoke<ServerStats>("session_stats", { id }),
   /** A quiet look at a host for its tile: connects with what is saved, asks nothing. */
