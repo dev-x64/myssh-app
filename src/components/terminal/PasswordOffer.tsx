@@ -1,6 +1,5 @@
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { Check, Copy, KeyRound, Plus, Server, UserRound, WandSparkles } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CornerDownLeft, KeyRound, Plus, Server, UserRound } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { mutate } from "../../lib/actions";
 import { api, type Id } from "../../lib/api";
 import { useT, type MessageKey } from "../../lib/i18n";
@@ -12,9 +11,9 @@ import { cx, Field, Modal, PasswordInput } from "../ui";
 /**
  * The shell asks for a password (sudo, su, ssh onwards, mysql, git, a key's
  * passphrase…): the saved ones are listed under the prompt, the one most
- * likely to be taken first. A prompt for a new password starts with making
- * one up. One is typed only when chosen, with a click or the arrows and
- * Enter; typing on puts the list away, and so does Escape.
+ * likely to be taken first; the one pointed at or chosen shows above the
+ * list whose it is. One is typed only when chosen, with a click or the
+ * arrows and Enter; typing on puts the list away, and so does Escape.
  */
 export function PasswordOffer({ tab }: { tab: Tab }) {
   const t = useT();
@@ -25,6 +24,7 @@ export function PasswordOffer({ tab }: { tab: Tab }) {
   // Read again when the vault changes: a password saved elsewhere shows up here.
   useVault((s) => s.snapshot);
   const rows = offer ? passwordRows(tab.hostId, offer) : [];
+  const [hovered, setHovered] = useState(-1);
 
   useLayoutEffect(() => {
     const list = ref.current;
@@ -49,6 +49,8 @@ export function PasswordOffer({ tab }: { tab: Tab }) {
 
   if (!session || !offer) return null;
   const failedRow = rows.find((row) => row.kind === "saved" && row.choice.key === offer.failed);
+  const focused = hovered >= 0 ? hovered : offer.index;
+  const shown = rows[focused];
   return (
     <div
       ref={ref}
@@ -60,7 +62,15 @@ export function PasswordOffer({ tab }: { tab: Tab }) {
       {failedRow?.kind === "saved" && (
         <div className="password-refused">{t("term.password.failed_now", { name: failedRow.choice.label })}</div>
       )}
-      <div className="suggest-list">
+      {shown?.kind === "saved" && (
+        <div className="password-card">
+          <span>{t("host.username")}:</span>
+          <b>{shown.choice.username}</b>
+          <span>{t("host.password")}:</span>
+          <b className="password-mask">••••••••••••</b>
+        </div>
+      )}
+      <div className="suggest-list" onMouseLeave={() => setHovered(-1)}>
         {rows.map((row, index) => (
           <div
             key={row.kind === "saved" ? row.choice.key : row.kind}
@@ -70,15 +80,16 @@ export function PasswordOffer({ tab }: { tab: Tab }) {
               "suggest-item",
               `password-${row.kind}`,
               row.kind === "saved" && row.mark,
-              index === offer.index && "active",
+              index === focused && "active",
             )}
+            onMouseEnter={() => setHovered(index)}
             // Keep the terminal focused: act on press, not on click.
             onMouseDown={(e) => {
               e.preventDefault();
               session.passwords.choose(index);
             }}
           >
-            <PasswordLine row={row} user={offer.user} />
+            <PasswordLine row={row} user={offer.user} chosen={index === focused} />
           </div>
         ))}
       </div>
@@ -87,22 +98,15 @@ export function PasswordOffer({ tab }: { tab: Tab }) {
   );
 }
 
-function PasswordLine({ row, user }: { row: PasswordRow; user: string | null }) {
+function PasswordLine({ row, user, chosen }: { row: PasswordRow; user: string | null; chosen: boolean }) {
   const t = useT();
-  if (row.kind === "generate") {
-    return (
-      <div className="suggest-line">
-        <WandSparkles size={13} className="suggest-icon" />
-        <span className="suggest-text">{t("term.password.make")}</span>
-        <span className="suggest-detail">{t("term.password.make_detail")}</span>
-      </div>
-    );
-  }
+  const enter = chosen && <CornerDownLeft size={13} className="password-enter" />;
   if (row.kind === "add") {
     return (
       <div className="suggest-line">
         <Plus size={13} className="suggest-icon" />
         <span className="suggest-text">{user ? t("term.password.add_for", { user }) : t("term.password.add")}</span>
+        {enter}
       </div>
     );
   }
@@ -122,6 +126,7 @@ function PasswordLine({ row, user }: { row: PasswordRow; user: string | null }) 
           choice.own && <em>{t("term.password.this_host")}</em>
         )}
       </span>
+      {enter}
     </div>
   );
 }
@@ -129,12 +134,11 @@ function PasswordLine({ row, user }: { row: PasswordRow; user: string | null }) 
 const SAVE_TEXT: Record<NonNullable<Tab["passwordSave"]>["reason"], [MessageKey, MessageKey, MessageKey]> = {
   add: ["term.password.add_title", "term.password.add_text", "term.password.save_type"],
   update: ["term.password.update_title", "term.password.update_text", "term.password.save_type"],
-  made: ["term.password.made_title", "term.password.made_text", "common.save"],
 };
 
 /**
- * Keeping a password met in the terminal: one added from the list, one
- * refused and changed since, or a new one made up and taken by the server.
+ * Keeping a password met in the terminal: one added from the list, or one
+ * refused and changed since.
  * Kept where that account's password already is (the host, an identity),
  * or as a new identity; typed at the prompt if it is still waiting.
  */
@@ -145,23 +149,13 @@ export function PasswordSave({ tab }: { tab: Tab }) {
   const saving = tab.passwordSave;
   const [target, setTarget] = useState<SaveTarget | null>(saving?.target ?? null);
   const [username, setUsername] = useState(saving?.target.kind === "new" ? saving.target.username : "");
-  const [password, setPassword] = useState(saving?.password ?? "");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
-  // A new password closed unsaved is lost for good: asked once more first.
-  const [leaving, setLeaving] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 1500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
   if (!session || !saving || !target) return null;
 
   const host = snapshot.hosts.find((h) => h.id === tab.hostId);
   const [title, text, submitLabel] = SAVE_TEXT[saving.reason];
-  const made = saving.reason === "made";
   const close = () => {
-    if (made && !leaving && !copied) return setLeaving(true);
     useUi.getState().patchTab(tab.id, { passwordSave: null });
     session.focus();
   };
@@ -222,8 +216,7 @@ export function PasswordSave({ tab }: { tab: Tab }) {
     setBusy(false);
     if (!kept) return;
     useUi.getState().patchTab(tab.id, { passwordSave: null });
-    if (made) session.focus();
-    else session.passwords.saved(kept, password);
+    session.passwords.saved(kept, password);
   };
 
   return (
@@ -236,7 +229,7 @@ export function PasswordSave({ tab }: { tab: Tab }) {
       footer={
         <>
           <button type="button" className="btn" onClick={close}>
-            {made ? t(leaving ? "term.password.made_leave" : "term.password.made_skip") : t("common.cancel")}
+            {t("common.cancel")}
           </button>
           <button type="submit" className="btn primary" disabled={busy || missing}>
             {t(submitLabel)}
@@ -245,29 +238,9 @@ export function PasswordSave({ tab }: { tab: Tab }) {
       }
     >
       <p className="muted">{t(text)}</p>
-      {leaving && <p className="password-leaving">{t("term.password.made_lost")}</p>}
-      {made ? (
-        <div className="password-made">
-          <code className="selectable">{password}</code>
-          <button
-            type="button"
-            className="btn ghost icon small"
-            title={t(copied ? "common.copied" : "term.password.copy")}
-            onClick={() =>
-              void writeText(password).then(
-                () => setCopied(true),
-                () => {},
-              )
-            }
-          >
-            {copied ? <Check size={13} /> : <Copy size={13} />}
-          </button>
-        </div>
-      ) : (
-        <Field label={t("host.password")}>
-          <PasswordInput data-autofocus value={password} onChange={(e) => setPassword(e.target.value)} />
-        </Field>
-      )}
+      <Field label={t("host.password")}>
+        <PasswordInput data-autofocus value={password} onChange={(e) => setPassword(e.target.value)} />
+      </Field>
       {saving.reason !== "update" && (
         <Field label={t("term.password.where")}>
           <select className="select" value={value} onChange={(e) => pick(e.target.value)}>

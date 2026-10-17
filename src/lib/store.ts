@@ -133,26 +133,24 @@ export interface Tab {
   /**
    * The shell asks for a password on this cell: the saved ones are listed
    * there. `index` is the row chosen with the arrows (-1: none); `user` the
-   * account the prompt (or the command above it) names; `fresh` a prompt for
-   * a new password; `failed` the saved one just typed here and refused.
+   * account the prompt (or the command above it) names; `failed` the saved
+   * one just typed here and refused.
    */
   passwordOffer?: {
     row: number;
     col: number;
     index: number;
     user: string | null;
-    fresh: boolean;
     failed: string | null;
     prompt: string;
   } | null;
   /**
    * A password from the terminal is being kept: one added from the list,
-   * one refused and being updated, or a new one made up and taken.
+   * or one refused and being updated.
    */
   passwordSave?: {
-    reason: "add" | "update" | "made";
+    reason: "add" | "update";
     target: { kind: "host"; id: Id } | { kind: "identity"; id: Id } | { kind: "new"; username: string };
-    password?: string;
   } | null;
   /** Automatic reconnection gave up after this many attempts. */
   gaveUp: number | null;

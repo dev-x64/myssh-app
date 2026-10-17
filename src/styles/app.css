@@ -1973,8 +1973,38 @@ button.link {
   color: var(--danger);
 }
 
-.password-generate .suggest-icon {
-  color: var(--accent);
+/* Whose the password pointed at is, above the list; the password itself stays hidden. */
+.password-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin-bottom: 4px;
+  padding: 6px 8px 8px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.password-card span {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.password-card b {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.password-mask {
+  letter-spacing: 0.08em;
+}
+
+.password-enter {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-3);
 }
 
 /* The saved one just typed and refused: said above the list. */
@@ -1986,30 +2016,6 @@ button.link {
   color: var(--text);
   font-size: 12px;
   line-height: 1.4;
-}
-
-.password-leaving {
-  margin: 0;
-  color: var(--danger);
-  font-size: 12.5px;
-}
-
-/* A new password, made up and taken: shown once, to be kept. */
-.password-made {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--bg-2);
-}
-
-.password-made code {
-  flex: 1;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  letter-spacing: 0.02em;
 }
 
 .password-add .suggest-text {

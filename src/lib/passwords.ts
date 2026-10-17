@@ -2,9 +2,7 @@
 // ssh onwards, mysql -p, git over https, a key's passphrase, passwd… One is
 // typed only when chosen. Whether it was taken is read from what the server
 // says next, and remembered per host and account, so that the one that
-// works comes first and the one that did not is offered to be updated. At a
-// prompt for a new password, a strong one can be made up instead: it is
-// typed twice and kept once the server has taken it.
+// works comes first and the one that did not is offered to be updated.
 
 import type { Terminal } from "@xterm/xterm";
 import { api, type Id } from "./api";
@@ -15,10 +13,6 @@ import { useUi, useVault, type Tab } from "./store";
 /** A line that asks for a password and waits on it. */
 const PASSWORD_PROMPT =
   /(?:\b(?:password|passphrase|pass phrase|passcode|pin)\b|passwort|kennwort|contraseña|mot de passe|пароль|парольн)[^\n]{0,80}?:\s*$/i;
-/** The prompt asks for a new one: passwd, adduser, htpasswd, mysql, openssl… */
-const NEW_PROMPT = /\b(?:new|choose|create)\b|нов/i;
-/** …or for the new one once more. */
-const AGAIN_PROMPT = /retype|re-?enter|\bconfirm|\bverify|verifying|\brepeat|\bagain\b|повтор|ещё раз|еще раз|подтвер/i;
 /** The account a prompt asks the password of, when it says: `[sudo] password for admin:`. */
 const PROMPT_USER = /password for ([a-z_][\w.-]*)\s*:\s*$/i;
 /** `su`, `su -`, `su - admin` on the line above: the password of that account (root unless named). */
@@ -31,8 +25,6 @@ const REFUSED =
 
 /** How long the server may stay quiet before what it said about a password is taken as all it says. */
 const SETTLE_MS = 2500;
-/** How long a new password just made up waits for the prompt that asks for it again. */
-const REPEAT_MS = 30_000;
 // eslint-disable-next-line no-control-regex
 const ANSI = /\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g;
 
@@ -49,8 +41,7 @@ export interface PasswordChoice {
 }
 
 /** A row of the list under a prompt. */
-export type PasswordRow =
-  { kind: "generate" } | { kind: "saved"; choice: PasswordChoice; mark: "worked" | "failed" | null } | { kind: "add" };
+export type PasswordRow = { kind: "saved"; choice: PasswordChoice; mark: "worked" | "failed" | null } | { kind: "add" };
 
 export type PasswordOffer = NonNullable<Tab["passwordOffer"]>;
 
@@ -132,7 +123,7 @@ export function passwordRows(hostId: Id, offer: PasswordOffer): PasswordRow[] {
   const rank = (row: { choice: PasswordChoice; mark: string | null }) =>
     row.mark === "worked" ? 0 : offer.user && row.choice.username === offer.user ? 1 : row.choice.own ? 2 : 3;
   saved.sort((a, b) => rank(a) - rank(b));
-  return [...(offer.fresh ? [{ kind: "generate" as const }] : []), ...saved, { kind: "add" }];
+  return [...saved, { kind: "add" }];
 }
 
 /** The account a password asked for here belongs to: the one the prompt names, or the host's. */
@@ -145,18 +136,6 @@ export function promptAccount(hostId: Id, user: string | null): string {
   return snapshot.identities.find((i) => i.id === identityId)?.username ?? "";
 }
 
-/** Where a password of this account is best kept: what already keeps that account's, or a new identity. */
-export function targetFor(hostId: Id, account: string): SaveTarget {
-  const snapshot = useVault.getState().snapshot;
-  const host = snapshot.hosts.find((h) => h.id === hostId);
-  if (host?.auth.kind === "inline" && host.auth.username === account) return { kind: "host", id: host.id };
-  const ownIdentity = host?.auth.kind === "identity" ? host.auth.identity_id : null;
-  const identity =
-    snapshot.identities.find((i) => i.id === ownIdentity && i.username === account) ??
-    snapshot.identities.find((i) => i.username === account);
-  return identity ? { kind: "identity", id: identity.id } : { kind: "new", username: account };
-}
-
 export function targetOf(key: string): SaveTarget {
   const [kind, id] = key.split(":");
   return kind === "host" ? { kind: "host", id } : { kind: "identity", id };
@@ -164,27 +143,6 @@ export function targetOf(key: string): SaveTarget {
 
 export function keyOf(target: SaveTarget): string | null {
   return target.kind === "new" ? null : `${target.kind}:${target.id}`;
-}
-
-/** A strong password a person need not remember: letters, digits and a few signs every prompt takes. */
-export function makePassword(length = 20): string {
-  const lower = "abcdefghijkmnopqrstuvwxyz";
-  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const digits = "23456789";
-  const signs = "-_.!@#%+=";
-  const all = lower + upper + digits + signs;
-  const random = (n: number) => {
-    const buffer = new Uint32Array(1);
-    crypto.getRandomValues(buffer);
-    return buffer[0] % n;
-  };
-  const chars = [lower, upper, digits, signs].map((set) => set[random(set.length)]);
-  while (chars.length < length) chars.push(all[random(all.length)]);
-  for (let i = chars.length - 1; i > 0; i--) {
-    const j = random(i + 1);
-    [chars[i], chars[j]] = [chars[j], chars[i]];
-  }
-  return chars.join("");
 }
 
 /** What the helper needs from the session it serves. */
@@ -202,13 +160,11 @@ export interface PasswordHost {
 
 /** A password just typed, and what the server has said since. */
 interface Watch {
-  /** The saved one typed (`host:…`, `identity:…`), or null for one made up. */
-  key: string | null;
+  /** The saved one typed: `host:…` or `identity:…`. */
+  key: string;
   user: string | null;
   /** The prompt it answered, as it read. */
   prompt: string;
-  /** A new password, made up here: kept once taken. */
-  made: string | null;
   said: string;
 }
 
@@ -217,8 +173,6 @@ export class PasswordHelper {
   private dismissed: string | null = null;
   private watch: Watch | null = null;
   private settleTimer: number | undefined;
-  /** A new password made up and typed: typed again at the prompt that asks for it once more. */
-  private repeat: { password: string; until: number } | null = null;
   private readonly decoder = new TextDecoder();
 
   constructor(private readonly host: PasswordHost) {}
@@ -272,26 +226,14 @@ export class PasswordHelper {
     const buffer = this.host.term.buffer.active;
     if (now?.row === buffer.cursorY && now.col === buffer.cursorX) return;
     if (prompt.at === this.dismissed) return;
-    const again = AGAIN_PROMPT.test(prompt.line);
-
-    // The new password made up a moment ago, asked for once more.
-    if (again && this.repeat && Date.now() < this.repeat.until) {
-      const password = this.repeat.password;
-      this.repeat = null;
-      this.send(password);
-      return;
-    }
-
     // The same prompt again, or a refusal before it: the one typed was not taken.
     let failed: string | null = null;
     const watch = this.watch;
     if (watch && (REFUSED.test(watch.said) || watch.prompt === prompt.line)) {
       this.watch = null;
       window.clearTimeout(this.settleTimer);
-      if (watch.key) {
-        remember(this.host.hostId, watch.user, watch.key, false);
-        failed = watch.key;
-      }
+      remember(this.host.hostId, watch.user, watch.key, false);
+      failed = watch.key;
     }
     const user = this.user(prompt.line);
     this.host.patch({
@@ -300,7 +242,6 @@ export class PasswordHelper {
         col: buffer.cursorX,
         index: -1,
         user,
-        fresh: NEW_PROMPT.test(prompt.line) && !again,
         failed,
         prompt: prompt.line,
       },
@@ -314,21 +255,8 @@ export class PasswordHelper {
     if (!watch || this.asking()) return;
     this.watch = null;
     const refused = REFUSED.test(watch.said);
-    const locale = useSettings.getState().locale;
-    if (watch.key) {
-      remember(this.host.hostId, watch.user, watch.key, !refused);
-      if (refused) useUi.getState().toast("error", translate(locale, "term.password.refused"));
-    } else if (watch.made) {
-      this.repeat = null;
-      if (refused) useUi.getState().toast("error", translate(locale, "term.password.made_refused"));
-      else {
-        // Taken: kept now, or it is lost.
-        const account = promptAccount(this.host.hostId, watch.user);
-        this.host.patch({
-          passwordSave: { reason: "made", target: targetFor(this.host.hostId, account), password: watch.made },
-        });
-      }
-    }
+    remember(this.host.hostId, watch.user, watch.key, !refused);
+    if (refused) useUi.getState().toast("error", translate(useSettings.getState().locale, "term.password.refused"));
   }
 
   /** The arrows choose, Enter types the chosen one, Escape puts the list away. */
@@ -365,24 +293,19 @@ export class PasswordHelper {
     this.host.patch({ passwordOffer: null });
   }
 
-  /** A row was chosen: a password made up, a saved one typed (or updated, if it failed), or one added. */
+  /** A row was chosen: a saved one typed (or updated, if it failed), or one added. */
   choose(index: number) {
     const offer = this.offer;
     if (!offer) return;
     const row = passwordRows(this.host.hostId, offer)[index];
     if (!row) return;
     const account = promptAccount(this.host.hostId, offer.user);
-    if (row.kind === "generate") {
-      const password = makePassword();
-      this.repeat = { password, until: Date.now() + REPEAT_MS };
-      this.send(password, { key: null, user: offer.user, prompt: offer.prompt, made: password, said: "" });
-    } else if (row.kind === "saved" && row.mark === "failed") {
+    if (row.kind === "saved" && row.mark === "failed") {
       this.host.patch({ passwordSave: { reason: "update", target: targetOf(row.choice.key) } });
     } else if (row.kind === "saved") {
       const key = row.choice.key;
       void row.choice.fetch().then(
-        (password) =>
-          password && this.send(password, { key, user: offer.user, prompt: offer.prompt, made: null, said: "" }),
+        (password) => password && this.send(password, { key, user: offer.user, prompt: offer.prompt, said: "" }),
         () => {},
       );
     } else {
@@ -397,14 +320,14 @@ export class PasswordHelper {
     if (key) forgetRefusals(key);
     if (offer?.failed === key) this.host.patch({ passwordOffer: { ...offer, failed: null } });
     if (!offer || !key) return;
-    this.send(password, { key, user: offer.user, prompt: offer.prompt, made: null, said: "" });
+    this.send(password, { key, user: offer.user, prompt: offer.prompt, said: "" });
   }
 
   /** Types a password and Enter at the prompt, kept out of suggestions and history. */
-  private send(password: string, watch?: Watch) {
+  private send(password: string, watch: Watch) {
     if (this.host.tab()?.status !== "connected") return;
     this.host.patch({ passwordOffer: null });
-    if (watch) this.watch = watch;
+    this.watch = watch;
     this.host.forgetLine();
     this.host.type(`${password}\r`);
     this.host.focus();
