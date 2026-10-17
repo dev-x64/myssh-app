@@ -4,6 +4,7 @@ import type { Prompt, PromptReply } from "../../lib/api";
 import { formatDate, useT } from "../../lib/i18n";
 import { useSettings } from "../../lib/settings";
 import { Field, Modal } from "../ui";
+import { HostKeyHelp, hostKeyHelpSeen } from "./HostKeyHelp";
 
 interface Props<P extends Prompt = Prompt> {
   prompt: P;
@@ -29,7 +30,14 @@ function HostKeyPrompt({ prompt, onReply, scope = "tab" }: Props<Extract<Prompt,
       icon={changed ? <ShieldAlert size={17} /> : <ShieldQuestion size={17} />}
       onClose={() => onReply(cancel)}
       // A changed key must be accepted deliberately, never by pressing Enter.
-      onSubmit={changed ? undefined : () => onReply({ kind: "accept" })}
+      onSubmit={
+        changed
+          ? undefined
+          : () => {
+              hostKeyHelpSeen();
+              onReply({ kind: "accept" });
+            }
+      }
       footer={
         changed ? (
           <>
@@ -59,6 +67,7 @@ function HostKeyPrompt({ prompt, onReply, scope = "tab" }: Props<Extract<Prompt,
         </span>
         <span className="mono selectable">{prompt.fingerprint}</span>
       </div>
+      {!changed && <HostKeyHelp algorithm={prompt.algorithm} />}
       {prompt.known.map((known) => (
         <div key={known.fingerprint} className="keybox old">
           <span className="cap">

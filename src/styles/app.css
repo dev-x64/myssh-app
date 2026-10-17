@@ -7449,3 +7449,251 @@ html[data-theme="light"] .welcome-glow i:last-child {
     display: none;
   }
 }
+
+/* ----------------------------------------- what trusting a server means --- */
+
+/* One round takes 6 s: the key goes from the server to MySSH (0–30%),
+   MySSH keeps it (30–60%), and later checks a key against it (60–95%). */
+.hk-more {
+  align-self: flex-start;
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+
+.hk-help {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.hk-demo {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+}
+
+.hk-stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.hk-node {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 64px;
+  color: var(--text-3);
+  font-size: 10.5px;
+}
+
+.hk-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--text-2);
+}
+
+.hk-icon.mac {
+  color: var(--accent);
+  animation: hk-keep 6s ease-in-out infinite;
+}
+
+.hk-kept {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--bg-0);
+  color: var(--ok);
+  opacity: 0;
+  animation: hk-ok 6s ease-in-out infinite;
+}
+
+.hk-track {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  border-bottom: 2px dashed var(--line-strong);
+}
+
+.hk-card {
+  position: absolute;
+  bottom: -11px;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--accent-line);
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--accent);
+  font: 600 10px var(--font-mono);
+  white-space: nowrap;
+  animation: hk-travel 6s ease-in-out infinite;
+}
+
+.hk-steps {
+  position: relative;
+  min-height: 36px;
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hk-steps span {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: hk-step 6s ease-in-out infinite both;
+}
+
+.hk-steps .s2 {
+  animation-delay: 2s;
+}
+
+.hk-steps .s3 {
+  color: var(--ok);
+  animation-delay: 4s;
+}
+
+.hk-calm {
+  margin: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.hk-check {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.hk-command {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+}
+
+.hk-command code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font: 400 12px var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* From the server's side to MySSH's, then back to the middle to be checked. */
+@keyframes hk-travel {
+  0% {
+    left: calc(100% - 80px);
+    opacity: 0;
+  }
+  5%,
+  27% {
+    opacity: 1;
+  }
+  30%,
+  60% {
+    left: 0;
+    opacity: 0;
+  }
+  63% {
+    left: calc(100% - 80px);
+    opacity: 1;
+  }
+  85%,
+  95% {
+    left: calc(50% - 40px);
+    opacity: 1;
+  }
+  100% {
+    left: calc(50% - 40px);
+    opacity: 0;
+  }
+}
+
+@keyframes hk-keep {
+  0%,
+  28%,
+  58%,
+  100% {
+    box-shadow: none;
+  }
+  34%,
+  52% {
+    box-shadow: 0 0 0 4px var(--accent-soft), 0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+}
+
+@keyframes hk-ok {
+  0%,
+  32% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  38%,
+  96% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes hk-step {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  3%,
+  30% {
+    opacity: 1;
+    transform: none;
+  }
+  33%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hk-icon.mac,
+  .hk-kept,
+  .hk-card {
+    animation: none;
+  }
+  .hk-kept {
+    opacity: 1;
+  }
+  .hk-steps {
+    min-height: 0;
+  }
+  .hk-steps span {
+    position: static;
+    display: block;
+    opacity: 1;
+    animation: none;
+  }
+}
