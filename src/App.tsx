@@ -35,6 +35,7 @@ import { errorText, translate, useT, type MessageKey } from "./lib/i18n";
 import { startUpdates, useUpdate } from "./lib/update";
 import { NewTab } from "./components/hosts/NewTab";
 import { GuestPane, SharingOffDialog } from "./components/terminal/GuestPane";
+import { ForwardsButton } from "./components/terminal/ForwardsPanel";
 import { ShareButton, ShareMark } from "./components/terminal/SharePanel";
 import { leaveShare, receiveInvite, startGuestSync } from "./lib/guest";
 import { UpdateButton, UpdateNotice } from "./components/UpdateNotice";
@@ -410,6 +411,7 @@ function TitleBar() {
           >
             <SquareTerminal size={15} />
           </button>
+          {!isLocalTab(activeTab) && <ForwardsButton tab={activeTab} />}
           {!isLocalTab(activeTab) && <ShareButton tab={activeTab} />}
         </div>
       )}

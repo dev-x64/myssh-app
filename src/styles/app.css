@@ -4384,6 +4384,171 @@ html[data-theme="light"] .welcome-glow i:last-child {
   animation: pop 0.1s ease-out;
 }
 
+/* Port forwarding: the same panel as sharing, a little wider for the routes. */
+.fwd-panel {
+  width: 420px;
+}
+
+.fwd-list {
+  display: flex;
+  flex-direction: column;
+  margin: -4px -6px;
+}
+
+.fwd-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 9px 6px;
+  border-radius: var(--radius);
+}
+
+.fwd-row + .fwd-row {
+  border-top: 1px solid var(--line);
+}
+
+.fwd-row .switch {
+  margin-top: 1px;
+}
+
+.fwd-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.fwd-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 21px;
+}
+
+.fwd-port {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.fwd-label {
+  overflow: hidden;
+  color: var(--text-2);
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fwd-route {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.fwd-route svg {
+  flex: none;
+}
+
+.fwd-state {
+  margin-top: 4px;
+  font-size: 11.5px;
+}
+
+.fwd-state.ok {
+  color: var(--ok);
+}
+
+.fwd-state.bad,
+.fwd-hint.bad {
+  color: var(--danger);
+}
+
+.fwd-state.dim {
+  color: var(--text-3);
+}
+
+.fwd-actions {
+  display: flex;
+  flex: none;
+  gap: 1px;
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+
+.fwd-row:hover .fwd-actions,
+.fwd-actions:focus-within {
+  opacity: 1;
+}
+
+.fwd-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fwd-form-label {
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.fwd-pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fwd-pair .grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.fwd-pair input.port {
+  width: 84px;
+  font-family: var(--font-mono);
+}
+
+.fwd-pair input.grow {
+  font-family: var(--font-mono);
+}
+
+.fwd-fixed {
+  flex: 1;
+  padding: 0 2px;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.fwd-hint {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.fwd-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.fwd-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+
 .share-head {
   display: flex;
   align-items: center;
