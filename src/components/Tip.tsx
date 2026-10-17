@@ -1,4 +1,4 @@
-import { Lightbulb } from "lucide-react";
+import { BellOff, Lightbulb } from "lucide-react";
 import type { ReactNode } from "react";
 import { useT } from "../lib/i18n";
 import { useSettings } from "../lib/settings";
@@ -39,7 +39,13 @@ export function Tip(props: {
           <button type="button" className="btn small" onClick={seen}>
             {t("tip.ok")}
           </button>
-          <button type="button" className="link-button" onClick={() => useSettings.getState().set({ tips: false })}>
+          <button
+            type="button"
+            className="btn ghost small tip-off"
+            title={t("tip.off_hint")}
+            onClick={() => useSettings.getState().set({ tips: false })}
+          >
+            <BellOff size={13} />
             {t("tip.off")}
           </button>
         </div>

@@ -7522,9 +7522,17 @@ html[data-theme="light"] .welcome-glow i:last-child {
   gap: 12px;
 }
 
-.tip-actions .link-button {
-  color: var(--text-3);
-  font-size: 12px;
+.tip-actions {
+  gap: 6px;
+}
+
+.btn.tip-off {
+  gap: 6px;
+  color: var(--text-2);
+}
+
+.btn.tip-off:hover {
+  color: var(--text);
 }
 
 @container (max-width: 520px) {
