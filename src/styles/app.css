@@ -4416,6 +4416,15 @@ html[data-theme="light"] .welcome-glow i:last-child {
   gap: 7px;
 }
 
+/* The name OpenSSH users know it by. */
+.agent-flag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-3);
+  color: var(--text-3);
+  font: 500 11px var(--font-mono);
+}
+
 .agent-box.on {
   border-color: var(--accent-line);
 }

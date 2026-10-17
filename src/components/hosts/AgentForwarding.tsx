@@ -33,6 +33,7 @@ export function AgentForwarding(props: {
         <span className="field-label grow">
           <KeyRound size={14} />
           {t("agent.title")}
+          <code className="agent-flag">ssh -A</code>
         </span>
         <Switch
           on={props.on}
