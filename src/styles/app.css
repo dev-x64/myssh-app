@@ -7431,3 +7431,21 @@ html[data-theme="light"] .welcome-glow i:last-child {
     animation: none;
   }
 }
+
+/* Room between one section of hosts and the next. */
+.newtab .page-body .grid + .newtab-section,
+.newtab-section + .newtab-section {
+  margin-top: 22px;
+}
+
+/* The new tab says how the keyboard gets around it. */
+.newtab-keys {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@container (max-width: 760px) {
+  .newtab-keys {
+    display: none;
+  }
+}
