@@ -13,11 +13,14 @@ import { cx, Modal } from "../ui";
  * Folders become groups, key files go into the keychain, and hosts already
  * saved here are left unticked.
  */
-export function ImportDialog({ onClose }: { onClose: () => void }) {
+/** `initial`: a source found already, opened at once (the first launch offers them). */
+export function ImportDialog({ onClose, initial }: { onClose: () => void; initial?: ImportSource }) {
   const t = useT();
   const [sources, setSources] = useState<ImportSource[] | null>(null);
-  const [source, setSource] = useState<ImportSource | null>(null);
-  const [chosen, setChosen] = useState<Set<number>>(new Set());
+  const [source, setSource] = useState<ImportSource | null>(initial ?? null);
+  const [chosen, setChosen] = useState<Set<number>>(
+    () => new Set(initial?.hosts.flatMap((host, index) => (host.exists ? [] : [index])) ?? []),
+  );
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -45,7 +48,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     const hosts: FoundHost[] = source.hosts
       .filter((_, index) => chosen.has(index))
-      .map(({ label, address, port, username, folder, key_file, password, tags }) => ({
+      .map(({ label, address, port, username, folder, key_file, password, tags, forwards }) => ({
         label,
         address,
         port,
@@ -54,6 +57,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         key_file,
         password,
         tags,
+        forwards,
       }));
     try {
       const report = await api.importApply(hosts);

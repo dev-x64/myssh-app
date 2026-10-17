@@ -1,11 +1,15 @@
 import {
   ArrowLeft,
+  Check,
   ChevronRight,
   Cloud,
+  Download,
   Users,
   WandSparkles,
 } from "lucide-react";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { api, type ImportSource } from "../../lib/api";
+import { ImportDialog } from "../hosts/ImportDialog";
 import { useT, type Locale } from "../../lib/i18n";
 import { usePlan } from "../../lib/plan";
 import {
@@ -24,7 +28,11 @@ import { ThemeGrid } from "../settings/ThemeGrid";
 import { cx, Segmented, Switch } from "../ui";
 import { introWanted, WelcomeIntro } from "./WelcomeIntro";
 
-type Step = "look" | "account";
+type Step = "look" | "account" | "import";
+
+/** Sources with hosts that are not in MySSH yet. */
+const offered = (sources: ImportSource[] | null) =>
+  (sources ?? []).filter((source) => source.hosts.some((host) => !host.exists));
 
 /**
  * The first launch: the basics on one screen (language, theme, the
@@ -35,12 +43,31 @@ type Step = "look" | "account";
 export function Setup() {
   const t = useT();
   const cloud = useVault((s) => s.status?.cloud_available ?? false);
-  const steps: Step[] = cloud ? ["look", "account"] : ["look"];
+  const hostCount = useVault((s) => s.snapshot.hosts.length);
+  // What other apps on this computer hold, looked for while the first steps are read.
+  const [found, setFound] = useState<ImportSource[] | null>(null);
+  useEffect(() => {
+    api.importScan().then(setFound, () => setFound([]));
+  }, []);
   const [index, setIndex] = useState(0);
+  // Bringing hosts over is offered when there are some to bring and none
+  // here yet (signing in may have brought them); once shown, it stays.
+  const [importing, setImporting] = useState(false);
+  const withImport = importing || (offered(found).length > 0 && hostCount === 0);
+  const steps: Step[] = [
+    "look",
+    ...(cloud ? (["account"] as Step[]) : []),
+    ...(withImport ? (["import"] as Step[]) : []),
+  ];
   const step = steps[index];
   const last = index === steps.length - 1;
   const finish = () =>
     useSettings.getState().set({ setupDone: true, welcomed: true });
+  const next = () => {
+    if (last) return finish();
+    if (steps[index + 1] === "import") setImporting(true);
+    setIndex(index + 1);
+  };
   const [intro, setIntro] = useState(introWanted);
   const introDone = useCallback(() => setIntro(false), []);
 
@@ -64,7 +91,8 @@ export function Setup() {
               ))}
             </div>
             {step === "look" && <LookStep />}
-            {step === "account" && <AccountStep />}
+            {step === "account" && <AccountStep onDone={next} last={last} />}
+            {step === "import" && <ImportStep sources={offered(found)} />}
             <div className="setup-nav">
               {index > 0 ? (
                 <button
@@ -79,14 +107,17 @@ export function Setup() {
                   {t("setup.skip")}
                 </button>
               )}
-              {!(step === "account") && (
-                <button
-                  className="btn primary"
-                  onClick={() => (last ? finish() : setIndex(index + 1))}
-                >
-                  {last ? t("setup.done") : t("setup.next")}
-                  <ChevronRight size={15} />
+              {step === "import" && hostCount === 0 ? (
+                <button className="btn" onClick={finish}>
+                  {t("setup.import.skip")}
                 </button>
+              ) : (
+                step !== "account" && (
+                  <button className="btn primary" onClick={next}>
+                    {last ? t("setup.done") : t("setup.next")}
+                    <ChevronRight size={15} />
+                  </button>
+                )
               )}
             </div>
           </div>
@@ -203,12 +234,11 @@ function ProFeature(props: { icon: ReactNode; title: string; text: string }) {
   );
 }
 
-function AccountStep() {
+function AccountStep(props: { onDone: () => void; last: boolean }) {
   const t = useT();
   const account = useVault((s) => s.snapshot.cloud);
   const plan = usePlan((s) => s.plan?.plan);
-  const finish = () =>
-    useSettings.getState().set({ setupDone: true, welcomed: true });
+  const finish = props.onDone;
   return (
     <>
       <StepHead
@@ -251,7 +281,7 @@ function AccountStep() {
                 </>
               )}
               <button className="btn primary setup-finish" onClick={finish}>
-                {t("setup.done")}
+                {t(props.last ? "setup.done" : "setup.next")}
                 <ChevronRight size={15} />
               </button>
             </div>
@@ -267,6 +297,54 @@ function AccountStep() {
           )}
         </div>
       </div>
+    </>
+  );
+}
+
+/**
+ * Hosts other apps on this computer hold, offered to bring over: each
+ * source opens the import as it is in the hosts' page, its new hosts
+ * ticked. Shown only when there is something new to bring.
+ */
+function ImportStep(props: { sources: ImportSource[] }) {
+  const t = useT();
+  const hostCount = useVault((s) => s.snapshot.hosts.length);
+  const [open, setOpen] = useState<ImportSource | null>(null);
+  const total = props.sources.reduce((n, source) => n + source.hosts.filter((host) => !host.exists).length, 0);
+  return (
+    <>
+      <StepHead title={t("setup.import.title")} text={t("setup.import.text", { n: total })} />
+      <div className="setup-import">
+        {hostCount > 0 && (
+          <div className="setup-import-done">
+            <Check size={16} />
+            {t("setup.import.done", { hosts: t("hosts.count", { n: hostCount }) })}
+          </div>
+        )}
+        <div className="import-sources">
+          {props.sources.map((source) => (
+            <button
+              key={source.kind + source.location}
+              type="button"
+              className="import-source"
+              onClick={() => setOpen(source)}
+            >
+              <span className="card-icon accent small">
+                <Download size={15} />
+              </span>
+              <span className="import-main">
+                <b>{t(`import.kind.${source.kind}`)}</b>
+                <small>
+                  {t("hosts.count", { n: source.hosts.filter((host) => !host.exists).length })} · {source.location}
+                </small>
+              </span>
+              <ChevronRight size={15} className="dim" />
+            </button>
+          ))}
+        </div>
+        <p className="dim">{t("setup.import.hint")}</p>
+      </div>
+      {open && <ImportDialog initial={open} onClose={() => setOpen(null)} />}
     </>
   );
 }
