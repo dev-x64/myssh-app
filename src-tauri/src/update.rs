@@ -21,8 +21,10 @@
 //!
 //! Asking, a copy names its version and system, and its installation: a
 //! random number it made for itself on first launch, which has nothing to
-//! do with the computer and goes with the app's data. The server counts
-//! copies in use by it, a day at a time, and forgets it when the day ends.
+//! do with the computer and goes with the app's data. It says too whether
+//! it is signed in to an account, but not to which. The server counts
+//! copies in use by these, a day at a time, and forgets them when the day
+//! ends.
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -66,7 +68,7 @@ fn install_id(data_dir: &Path) -> Option<String> {
 /// The address to ask: the cloud server this app was built for. A
 /// development build has nothing to replace, so it asks only when pointed
 /// somewhere by hand.
-fn endpoint(install: Option<&str>) -> Option<Url> {
+fn endpoint(install: Option<&str>, signed_in: bool) -> Option<Url> {
     if PUBKEY.is_empty() {
         return None;
     }
@@ -77,11 +79,12 @@ fn endpoint(install: Option<&str>) -> Option<Url> {
         return None;
     }
     // The updater fills in its version and system; the server counts copies
-    // in use by them and by the installation's number, a day at a time, and
-    // keeps nothing else.
+    // in use by them, by the installation's number and by whether they are
+    // signed in, a day at a time, and keeps nothing else.
     let id = install.map(|id| format!("&id={id}")).unwrap_or_default();
+    let account = u8::from(signed_in);
     format!(
-        "{}/updates/latest.json?v={{{{current_version}}}}&os={{{{target}}}}&arch={{{{arch}}}}{id}",
+        "{}/updates/latest.json?v={{{{current_version}}}}&os={{{{target}}}}&arch={{{{arch}}}}{id}&acct={account}",
         crate::cloud::SERVER
     )
     .parse()
@@ -92,7 +95,7 @@ fn endpoint(install: Option<&str>) -> Option<Url> {
 /// such as the package for the Microsoft Store, does not: there the store
 /// brings the updates, and the app must not go looking for them.
 pub fn enabled() -> bool {
-    endpoint(None).is_some()
+    endpoint(None, false).is_some()
 }
 
 fn failed(e: tauri_plugin_updater::Error) -> Error {
@@ -100,8 +103,12 @@ fn failed(e: tauri_plugin_updater::Error) -> Error {
 }
 
 fn updater(app: &AppHandle) -> Result<Option<Updater>> {
-    let install = install_id(&app.state::<AppState>().data_dir);
-    let Some(endpoint) = endpoint(install.as_deref()) else {
+    let state = app.state::<AppState>();
+    let install = install_id(&state.data_dir);
+    let signed_in = state
+        .with_vault(|v| Ok(v.snapshot().cloud.is_some_and(|account| !account.revoked)))
+        .unwrap_or(false);
+    let Some(endpoint) = endpoint(install.as_deref(), signed_in) else {
         return Ok(None);
     };
     let updater = app
