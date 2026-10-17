@@ -195,7 +195,8 @@ export const knownHosts: KnownHost[] = hosts.slice(0, 5).map((h, i) => ({
   algorithm: "ssh-ed25519",
   public_key: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKnown${i}KnownKnownKnownKnownKnown`,
   fingerprint: `SHA256:Kn0wn${i}xP0sLkE7rB2yH6uW9aZ3dF5gJiOtYeR1cU`,
-  added_at: now - (40 - i * 5) * day,
+  // The core keeps this in milliseconds.
+  added_at: (now - (40 - i * 5) * day) * 1000,
 }));
 
 export const frequent: FrequentCommand[] = [

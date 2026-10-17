@@ -1629,14 +1629,18 @@ button.link {
   min-width: 0;
 }
 
+/* The name first and whole; the chips after it move to a line of their own
+   rather than squeeze the name away. */
 .item-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   font-weight: 600;
 }
 
 .item-title .name {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
