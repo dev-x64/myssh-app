@@ -6727,31 +6727,21 @@ html[data-theme="light"] .welcome-glow i:last-child {
   opacity: 0.7;
 }
 
-/* The key a host signs in with, by its name. */
-.key-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  max-width: 110px;
-  margin-left: 7px;
-  padding: 1px 5px;
-  border-radius: 5px;
-  background: var(--bg-3);
-  color: var(--text-2);
-  vertical-align: 1px;
-  font-size: 10.5px;
-  font-weight: 600;
-}
-
-.key-badge svg {
-  flex: none;
-  color: var(--accent);
-}
-
-.key-badge span {
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* The key a host signs in with, after its address: as quiet as the address. */
+.key-mark {
+  margin-left: 8px;
   white-space: nowrap;
+}
+
+.key-mark::before {
+  content: "·";
+  margin-right: 8px;
+}
+
+.key-mark svg {
+  margin-right: 4px;
+  vertical-align: -1.5px;
+  opacity: 0.85;
 }
 
 /* Tailscale SSH asking for a confirmation in the browser, on the connection screen. */

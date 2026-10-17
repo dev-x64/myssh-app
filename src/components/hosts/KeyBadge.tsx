@@ -4,8 +4,9 @@ import { useT } from "../../lib/i18n";
 import { useVault } from "../../lib/store";
 
 /**
- * On a host's tile, when it signs in with a key, directly or through an
- * identity: a key and the key's name, and in a tooltip how it is chosen.
+ * On a host's tile, after its address, when it signs in with a key,
+ * directly or through an identity: a key and the key's name, and in a
+ * tooltip how it is chosen.
  */
 export function KeyBadge({ host }: { host: HostView }) {
   const t = useT();
@@ -22,9 +23,9 @@ export function KeyBadge({ host }: { host: HostView }) {
     ? t("hosts.key.via", { key: name, identity: identity.label || identity.username })
     : t("hosts.key", { key: name });
   return (
-    <span className="key-badge" title={title}>
-      <KeyRound size={10} />
-      <span>{name}</span>
+    <span className="key-mark" title={title}>
+      <KeyRound size={11} />
+      {name}
     </span>
   );
 }

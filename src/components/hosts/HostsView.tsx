@@ -397,9 +397,11 @@ export function HostsView() {
                         {host.pinned && <Pin size={12} className="card-pin" aria-label={t("hosts.pinned")} />}
                         {hostTitle(host)}
                         <TailscaleBadge host={host} />
+                      </div>
+                      <div className="card-sub">
+                        {hostSubtitle(host, snapshot)}
                         <KeyBadge host={host} />
                       </div>
-                      <div className="card-sub">{hostSubtitle(host, snapshot)}</div>
                       {host.os && <div className="card-sub card-os">{host.os.name}</div>}
                       {host.tags.some((name) => name !== "tailscale") && (
                         <div className="card-tags">
