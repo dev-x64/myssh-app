@@ -173,6 +173,8 @@ export function HostPanel(props: {
   panel: NonNullable<PanelState>;
   onClose: () => void;
   onDelete: (host: HostView) => void;
+  /** Told of the host once saved, before the panel closes. */
+  onSaved?: (host: HostView) => void;
 }) {
   const t = useT();
   const snapshot = useVault((s) => s.snapshot);
@@ -305,6 +307,7 @@ export function HostPanel(props: {
     if (!saved) return;
     // Opened from a tab that could not connect: that tab tries again.
     const waiting = props.panel.mode === "edit" ? props.panel.tabId : undefined;
+    props.onSaved?.(saved);
     props.onClose();
     if (!connect) return;
     const ui = useUi.getState();

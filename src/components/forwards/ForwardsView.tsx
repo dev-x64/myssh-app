@@ -6,7 +6,7 @@ import { closeForward, openForward, refreshForwards, useForwards, type OpenForwa
 import { errorText, useT, type T } from "../../lib/i18n";
 import { LINUX } from "../../lib/platform";
 import { openHost } from "../../lib/sessions";
-import { groupOptions } from "../hosts/HostPanel";
+import { groupOptions, HostPanel } from "../hosts/HostPanel";
 import { OsIcon } from "../hosts/OsIcon";
 import { compareHosts, hostSubtitle, hostTitle, useUi, useVault, type Tab } from "../../lib/store";
 import { cx, Empty } from "../ui";
@@ -78,6 +78,8 @@ export function ForwardsView() {
   const [query, setQuery] = useState("");
   /** The forward in the editor: `new`, or one by its id. */
   const [editing, setEditing] = useState<Id | "new" | null>(null);
+  /** A new host being made from the editor, and where to say which it is. */
+  const [hostForm, setHostForm] = useState<{ done: (id: Id) => void } | null>(null);
 
   const entries = useMemo<Entry[]>(
     () =>
@@ -208,7 +210,7 @@ export function ForwardsView() {
               text={entries.length === 0 ? t("fwd.empty.text") : t("fwd.no_results", { query: query.trim() })}
               action={
                 entries.length === 0 && (
-                  <button className="btn primary" disabled={hosts.length === 0} onClick={() => setEditing("new")}>
+                  <button className="btn primary" onClick={() => setEditing("new")}>
                     <Plus size={15} />
                     {t("fwd.new")}
                   </button>
@@ -225,7 +227,17 @@ export function ForwardsView() {
           entry={current ?? null}
           hosts={hosts}
           entries={entries}
+          hidden={hostForm !== null}
+          onAddHost={(done) => setHostForm({ done })}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {hostForm && (
+        <HostPanel
+          panel={{ mode: "new", groupId: null }}
+          onClose={() => setHostForm(null)}
+          onSaved={(host) => hostForm.done(host.id)}
+          onDelete={() => {}}
         />
       )}
     </>
@@ -286,7 +298,15 @@ const portOf = (text: string): number | null => {
  * the port here, drawn as it will work. The helper fills in a known
  * service's port.
  */
-function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries: Entry[]; onClose: () => void }) {
+function ForwardEditor(props: {
+  entry: Entry | null;
+  hosts: HostView[];
+  entries: Entry[];
+  /** Kept, with what is typed, while a new host is being made beside it. */
+  hidden: boolean;
+  onAddHost: (done: (id: Id) => void) => void;
+  onClose: () => void;
+}) {
   const t = useT();
   const f = props.entry?.forward;
   // A new forward names no host until one is picked, unless there is only one.
@@ -370,6 +390,7 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
   return (
     <form
       className="panel fwd-editor"
+      hidden={props.hidden}
       onSubmit={(e) => {
         e.preventDefault();
         void save(false);
@@ -397,6 +418,12 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
             setHostId(id);
             setPicking(false);
           }}
+          onAdd={() =>
+            props.onAddHost((id) => {
+              setHostId(id);
+              setPicking(false);
+            })
+          }
         />
       ) : (
       <>
@@ -560,7 +587,13 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
 }
 
 /** The hosts to go through, to search and pick from, in their groups. */
-function HostPicker(props: { hosts: HostView[]; current: Id | null; onBack: () => void; onPick: (id: Id) => void }) {
+function HostPicker(props: {
+  hosts: HostView[];
+  current: Id | null;
+  onBack: () => void;
+  onPick: (id: Id) => void;
+  onAdd: () => void;
+}) {
   const t = useT();
   const snapshot = useVault((s) => s.snapshot);
   const [query, setQuery] = useState("");
@@ -604,6 +637,9 @@ function HostPicker(props: { hosts: HostView[]; current: Id | null; onBack: () =
             spellCheck={false}
           />
         </div>
+        <button type="button" className="btn icon" title={t("hosts.new")} aria-label={t("hosts.new")} onClick={props.onAdd}>
+          <Plus size={15} />
+        </button>
       </div>
       <div className="panel-body scroll fwd-picker">
         {sections.map((section) => (
@@ -628,7 +664,17 @@ function HostPicker(props: { hosts: HostView[]; current: Id | null; onBack: () =
             ))}
           </div>
         ))}
-        {sections.length === 0 && <p className="muted">{t("fwd.no_results", { query: query.trim() })}</p>}
+        {props.hosts.length === 0 ? (
+          <div className="fwd-picker-none">
+            <p className="muted">{t("fwd.host.none")}</p>
+            <button type="button" className="btn primary" onClick={props.onAdd}>
+              <Plus size={15} />
+              {t("hosts.new")}
+            </button>
+          </div>
+        ) : (
+          sections.length === 0 && <p className="muted">{t("fwd.no_results", { query: query.trim() })}</p>
+        )}
       </div>
     </>
   );

@@ -4389,6 +4389,10 @@ html[data-theme="light"] .welcome-glow i:last-child {
   width: 430px;
 }
 
+.panel.fwd-editor[hidden] {
+  display: none;
+}
+
 .fwd-icon.up {
   background: color-mix(in srgb, var(--ok) 16%, transparent);
   color: var(--ok);
@@ -4737,6 +4741,17 @@ html[data-theme="light"] .welcome-glow i:last-child {
 
 .fwd-picker-head .search {
   width: auto;
+}
+
+.fwd-picker-none {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.fwd-picker-none .muted {
+  margin: 0;
 }
 
 .fwd-picker-section {
