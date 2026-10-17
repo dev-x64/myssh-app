@@ -11,6 +11,11 @@ import { Confirm, cx } from "../ui";
 import { SignInForm } from "./SignInForm";
 import { openEmailDialog } from "./ChangeEmail";
 import { GetProButton, ProBadge } from "./Pro";
+
+/** A device's system as people write it. */
+function platformName(platform: string): string {
+  return ({ macos: "macOS", windows: "Windows", linux: "Linux", ios: "iOS", android: "Android" } as Record<string, string>)[platform] ?? platform;
+}
 import { openAccountPage, signOutOfCloud, useSyncStatus } from "./status";
 
 function describeConflict(note: ConflictNote, t: T): string {
@@ -61,7 +66,7 @@ function Devices() {
                   {device.current && <span className="chip accent">{t("cloud.devices.this")}</span>}
                 </div>
                 <div className="item-sub">
-                  {device.platform}
+                  {platformName(device.platform)}
                   {" · "}
                   {t("cloud.devices.added", { date: formatDate(device.created_at * 1000, locale) })}
                   {" · "}
