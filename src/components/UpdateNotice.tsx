@@ -1,8 +1,8 @@
-import { AlertTriangle, ArrowUpCircle, Download, RotateCw, Undo2 } from "lucide-react";
+import { AlertTriangle, ArrowUpCircle, Download, RotateCw } from "lucide-react";
 import { errorText, useT } from "../lib/i18n";
 import { useUi } from "../lib/store";
 import { PUT_OFF_TIMES, useUpdate } from "../lib/update";
-import { cx, Modal } from "./ui";
+import { Modal } from "./ui";
 
 /**
  * A small button in the corner of the title bar, there only while another
@@ -17,15 +17,12 @@ export function UpdateButton() {
   if (!available) return null;
   return (
     <button
-      className={cx("update-pill", available.rollback && !ready && "rollback")}
-      title={t(
-        ready ? "update.ready.hint" : available.rollback ? "update.rollback.hint" : "update.available.hint",
-        { version: available.version, current: available.current },
-      )}
+      className="update-pill"
+      title={t(ready ? "update.ready.hint" : "update.available.hint", { version: available.version })}
       onClick={() => setDialog(true)}
     >
-      {ready ? <RotateCw size={13} /> : available.rollback ? <Undo2 size={13} /> : <ArrowUpCircle size={13} />}
-      <span>{t(ready ? "update.restart_pill" : available.rollback ? "update.rollback.pill" : "update.pill")}</span>
+      {ready ? <RotateCw size={13} /> : <ArrowUpCircle size={13} />}
+      <span>{t(ready ? "update.restart_pill" : "update.pill")}</span>
     </button>
   );
 }
@@ -43,7 +40,6 @@ export function UpdateNotice() {
   const busy = phase === "downloading" || phase === "restarting";
   const ready = phase === "ready";
   if (!dialog || !available) return null;
-  const back = available.rollback;
 
   // Closed without installing: counted, and after a few times it installs by itself.
   const close = () => {
@@ -72,10 +68,8 @@ export function UpdateNotice() {
 
   return (
     <Modal
-      title={t(ready ? "update.ready.title" : back ? "update.rollback.title" : "update.title", {
-        version: available.version,
-      })}
-      icon={back && !ready ? <Undo2 size={17} /> : <Download size={17} />}
+      title={t(ready ? "update.ready.title" : "update.title", { version: available.version })}
+      icon={<Download size={17} />}
       onClose={() => !busy && close()}
       onSubmit={() => !unsaved && void (ready ? restart() : install(true))}
       footer={
@@ -89,7 +83,7 @@ export function UpdateNotice() {
             </button>
           )}
           <button type="submit" className="btn primary" disabled={busy || unsaved} data-autofocus>
-            {t(ready ? "update.restart" : back ? "update.rollback.install" : "update.install")}
+            {t(ready ? "update.restart" : "update.install")}
           </button>
         </>
       }
@@ -98,12 +92,7 @@ export function UpdateNotice() {
         <p>{t("update.ready.text")}</p>
       ) : (
         <>
-          <p>
-            {t(back ? "update.rollback.text" : "update.current", {
-              version: back ? available.version : available.current,
-              current: available.current,
-            })}
-          </p>
+          <p>{t("update.current", { version: available.current })}</p>
           {available.notes && <pre className="update-notes selectable scroll">{available.notes}</pre>}
           {putOff === PUT_OFF_TIMES - 1 && <p className="muted">{t("update.last_put_off")}</p>}
         </>

@@ -4296,17 +4296,6 @@ html[data-theme="light"] .welcome-glow i:last-child {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
-/* The way back from a withdrawn version is not an everyday update. */
-.update-pill.rollback {
-  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-  color: var(--danger);
-}
-
-.update-pill.rollback:hover {
-  background: color-mix(in srgb, var(--danger) 24%, transparent);
-}
-
 .update-notes {
   max-height: 220px;
   margin: 0;

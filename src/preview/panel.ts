@@ -8,7 +8,7 @@ const LABELS: { [K in keyof Scenario]?: [string, Record<string, string>] } = {
   account: ["Аккаунт", { none: "вышел", free: "Free", pro: "Pro", revoked: "отключён" }],
   cloud: ["Облако в сборке", { true: "есть", false: "нет" }],
   empty: ["Хранилище", { false: "с данными", true: "пустое" }],
-  update: ["Обновление", { none: "нет", available: "есть", rollback: "откат" }],
+  update: ["Обновление", { none: "нет", available: "есть" }],
   offline: ["Сервер", { false: "доступен", true: "офлайн" }],
   vaultError: ["Хранилище не открылось", { false: "нет", true: "да" }],
   os: ["Система", { mac: "macOS", windows: "Windows", linux: "Linux" }],

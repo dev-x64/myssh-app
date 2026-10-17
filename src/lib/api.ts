@@ -391,8 +391,6 @@ export interface UpdateInfo {
   current: string;
   notes: string | null;
   date: string | null;
-  /** The way back from a version that was withdrawn, not a newer one. */
-  rollback: boolean;
 }
 
 export interface UpdateProgress {

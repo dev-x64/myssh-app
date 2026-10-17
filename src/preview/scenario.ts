@@ -10,7 +10,7 @@ export interface Scenario {
   cloud: boolean;
   /** No hosts, keys or snippets yet. */
   empty: boolean;
-  update: "none" | "available" | "rollback";
+  update: "none" | "available";
   /** The vault cannot be opened. */
   vaultError: boolean;
   /** The cloud server cannot be reached. */
@@ -46,7 +46,7 @@ export const CHOICES: { [K in keyof Scenario]: Scenario[K][] } = {
   account: ["none", "free", "pro", "revoked"],
   cloud: [true, false],
   empty: [false, true],
-  update: ["none", "available", "rollback"],
+  update: ["none", "available"],
   vaultError: [false, true],
   offline: [false, true],
   os: ["mac", "windows", "linux"],

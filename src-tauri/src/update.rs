@@ -13,11 +13,9 @@
 //! ends the app; so one taken for the next launch is downloaded and kept,
 //! and the installer is run as the app closes.
 //!
-//! An update is a newer version. The one exception is the way back: when
-//! the server says the version in use has been withdrawn, the older one it
-//! names is offered instead. That too is a genuine release, signed as the
-//! version it claims to be, and it too waits for the user to take it; what
-//! the server gains is the choice among releases the owner once signed.
+//! An update is only ever a newer version. A release that turns out to be
+//! bad is mended by a newer one, never by sending copies back to an older
+//! one, which may not read what the newer one wrote.
 //!
 //! Asking, a copy names its version and system, and its installation: a
 //! random number it made for itself on first launch, which has nothing to
@@ -31,7 +29,6 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use myssh_core::{Error, Result};
-use semver::Version;
 use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State, Url};
@@ -117,35 +114,17 @@ fn updater(app: &AppHandle) -> Result<Option<Updater>> {
         .endpoints(vec![endpoint])
         .map_err(failed)?
         .timeout(Duration::from_secs(20))
-        // Whatever differs from this version is looked at; `offer` decides.
-        .version_comparator(|current, release| release.version != current)
         .build()
         .map_err(failed)?;
     Ok(Some(updater))
 }
 
-/// What the server has for this copy of the app.
-struct Offer {
-    update: Update,
-    /// It is older than this version, which the server says is withdrawn.
-    rollback: bool,
-}
-
-/// Asks the server. A newer version is an update; an older one is taken
-/// only as a rollback the server asks for by name; anything else is nothing.
-async fn offer(app: &AppHandle) -> Result<Option<Offer>> {
+/// Asks the server for a version newer than this one.
+async fn offer(app: &AppHandle) -> Result<Option<Update>> {
     let Some(updater) = updater(app)? else {
         return Ok(None);
     };
-    let Some(update) = updater.check().await.map_err(failed)? else {
-        return Ok(None);
-    };
-    let parse = |version: &str| Version::parse(version.trim_start_matches('v'));
-    let (Ok(offered), Ok(current)) = (parse(&update.version), parse(&update.current_version)) else {
-        return Ok(None);
-    };
-    let rollback = offered < current && update.raw_json["rollback"].as_bool() == Some(true);
-    Ok((offered > current || rollback).then_some(Offer { update, rollback }))
+    updater.check().await.map_err(failed)
 }
 
 #[derive(Serialize)]
@@ -155,20 +134,17 @@ pub struct UpdateInfo {
     notes: Option<String>,
     /// When it was published, as the server wrote it.
     date: Option<String>,
-    /// This is the way back from a withdrawn version, not a newer one.
-    rollback: bool,
 }
 
 /// Looks for a newer version. `None`: this is the latest, or this build
 /// does not update itself.
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> Result<Option<UpdateInfo>> {
-    Ok(offer(&app).await?.map(|Offer { update, rollback }| UpdateInfo {
+    Ok(offer(&app).await?.map(|update| UpdateInfo {
         date: update.raw_json["pub_date"].as_str().map(str::to_string),
         notes: update.body.filter(|notes| !notes.trim().is_empty()),
         current: update.current_version,
         version: update.version,
-        rollback,
     }))
 }
 
@@ -185,8 +161,7 @@ pub struct Progress {
 pub async fn update_install(app: AppHandle, progress: Channel<Progress>) -> Result<()> {
     let update = offer(&app)
         .await?
-        .ok_or_else(|| Error::Update("there is no other version to install".into()))?
-        .update;
+        .ok_or_else(|| Error::Update("there is no newer version to install".into()))?;
     let downloaded = Mutex::new((0u64, Instant::now()));
     let done = progress.clone();
     let bytes = update

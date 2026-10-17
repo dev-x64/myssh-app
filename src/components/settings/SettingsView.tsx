@@ -326,9 +326,7 @@ export function SettingsView() {
               name={t("settings.version")}
               hint={
                 update.available
-                  ? t(update.available.rollback ? "update.rollback.available" : "update.available", {
-                      version: update.available.version,
-                    })
+                  ? t("update.available", { version: update.available.version })
                   : status && !status.updates
                     ? t(WINDOWS ? "update.by_store" : "update.not_here")
                     : update.checkedAt

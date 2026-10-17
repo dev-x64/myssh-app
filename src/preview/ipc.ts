@@ -72,11 +72,10 @@ export function createHandler(scenario: Scenario) {
     scenario.update === "none"
       ? null
       : {
-          version: scenario.update === "rollback" ? "0.0.9" : "0.1.1",
+          version: "0.1.1",
           current: "0.1.0",
           notes: "Faster file transfers.\nThe account menu shows whether you are on Pro.",
           date: new Date().toISOString(),
-          rollback: scenario.update === "rollback",
         };
 
   const hostById = (id: unknown): HostView => {

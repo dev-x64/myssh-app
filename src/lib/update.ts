@@ -10,10 +10,6 @@
 // update can be taken now, with a restart, or left for the next launch.
 // A restart ends the connections, and the tabs open again once the app is
 // back.
-//
-// What is found is usually newer. In an emergency it is older: the version
-// in use was withdrawn, and the way back is offered. That is not left for
-// the user to come across: the dialog opens by itself, once.
 
 import { create } from "zustand";
 import { api, asApiError, type ApiError, type UpdateInfo } from "./api";
@@ -108,8 +104,6 @@ export const useUpdate = create<UpdateStore>((set, get) => ({
     set({ phase: "checking", ...(quiet ? {} : { error: null }) });
     try {
       const available = await api.updateCheck();
-      const before = get().available;
-      const news = available?.rollback && !(before?.rollback && before.version === available.version);
       const record = available ? putOffFor(available.version) : null;
       set({
         available,
@@ -117,7 +111,6 @@ export const useUpdate = create<UpdateStore>((set, get) => ({
         checkedAt: Date.now(),
         error: null,
         putOff: record?.times ?? 0,
-        ...(news ? { dialog: true } : {}),
       });
       // Waited long enough: it goes in for the next launch, without a word.
       const overdue = record && (record.times >= PUT_OFF_TIMES || Date.now() - record.since >= PUT_OFF_MS);
