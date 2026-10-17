@@ -167,6 +167,15 @@ export function TagInput(props: {
  * A dialog. `scope="tab"` covers only its positioned parent (a terminal
  * pane); the default covers the whole window.
  */
+function ModalClose({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  return (
+    <button type="button" className="btn ghost icon small modal-close" aria-label={t("common.close")} title={t("common.close")} onClick={onClose}>
+      <X size={15} />
+    </button>
+  );
+}
+
 export function Modal(props: {
   title: string;
   icon?: ReactNode;
@@ -216,6 +225,8 @@ export function Modal(props: {
         <div className="modal-head">
           {props.icon && <span className="badge">{props.icon}</span>}
           <h2>{props.title}</h2>
+          {/* Escape and a click beside do the same; this says it can be done. */}
+          <ModalClose onClose={props.onClose} />
         </div>
         <div className="modal-body scroll">{props.children}</div>
         <div className="modal-foot">{props.footer}</div>
