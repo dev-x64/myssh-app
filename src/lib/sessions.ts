@@ -11,6 +11,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import { api, asApiError, type Id, type PromptReply, type SessionEvent } from "./api";
 import { forgetTab } from "./external";
+import { forgetForwards, forwardsClosed, forwardsConnected } from "./forwards";
 import { Highlighter, type HighlightColors } from "./highlight";
 import { t } from "./i18n";
 import { LINUX, WINDOWS } from "./platform";
@@ -339,6 +340,9 @@ export class TermSession {
         }
         if (useUi.getState().active === this.tabId) this.focus();
         if (this.pendingRun) this.runWhenListening(false);
+        if (this.hostId !== LOCAL_HOST_ID && this.sessionId !== null) {
+          forwardsConnected(this.tabId, this.sessionId, this.hostId);
+        }
         break;
       }
       case "closed":
@@ -349,8 +353,10 @@ export class TermSession {
 
   private onClosed(event: Extract<SessionEvent, { type: "closed" }>) {
     const wasConnected = this.tab()?.status === "connected";
-    // A shared session lasts as long as the session itself.
+    // A shared session lasts as long as the session itself; forwarded
+    // ports close with it and wait for the next connection.
     stopShare(this.tabId);
+    forwardsClosed(this.tabId);
     this.sessionId = null;
     this.input = "";
     this.suggester.reset();
@@ -710,6 +716,7 @@ export function requestCloseEditor(tabId: string) {
 export function closeTab(tabId: string) {
   stopShare(tabId);
   forgetTab(tabId);
+  forgetForwards(tabId);
   sessions.get(tabId)?.dispose();
   sessions.delete(tabId);
   useUi.getState().removeTab(tabId);

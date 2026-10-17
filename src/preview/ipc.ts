@@ -6,6 +6,8 @@
 import type { Channel } from "@tauri-apps/api/core";
 import type {
   ApiError,
+  ForwardStatus,
+  PortForwardInput,
   AppStatus,
   CloudView,
   GroupInput,
@@ -102,12 +104,21 @@ export function createHandler(scenario: Scenario) {
       startup_snippet_id: input.startup_snippet_id,
       os: existing?.os ?? null,
       pinned: existing?.pinned ?? false,
+      forwards: input.forwards ? forwardsOf(input.forwards) : (existing?.forwards ?? []),
       created_at: existing?.created_at ?? stamp(),
       updated_at: stamp(),
     };
     vault.hosts = existing ? vault.hosts.map((h) => (h.id === host.id ? host : h)) : [...vault.hosts, host];
     return host;
   }
+
+  function forwardsOf(input: PortForwardInput[]) {
+    return input.map((f) => ({ ...f, id: f.id ?? newId("f"), remote_host: f.remote_host.trim() || "localhost" }));
+  }
+
+  // Forwards open in the preview, by session and forward: they carry
+  // nothing, but count a few made-up connections now and then.
+  const forwards = new Map<string, ForwardStatus>();
 
   function generateKey(kind: KeyKind, label: string): KeyView {
     const algorithm = { ed25519: "ssh-ed25519", ecdsa_p256: "ecdsa-sha2-nistp256", ecdsa_p384: "ecdsa-sha2-nistp384", rsa4096: "ssh-rsa" }[kind];
@@ -172,6 +183,11 @@ export function createHandler(scenario: Scenario) {
     host_move: ({ id, groupId }) => {
       const host = hostById(id);
       host.group_id = (groupId as string | null) ?? null;
+      return host;
+    },
+    host_set_forwards: ({ id, forwards: input }) => {
+      const host = hostById(id);
+      host.forwards = forwardsOf(input as PortForwardInput[]);
       return host;
     },
     host_pin: ({ id, pinned }) => {
@@ -480,6 +496,29 @@ export function createHandler(scenario: Scenario) {
     session_ack: () => undefined,
     session_close: ({ id }) => shell.close(Number(id)),
     session_close_all: () => shell.closeAll(),
+    forward_start: async ({ id, forwardId, target }) => {
+      await later(250);
+      const port = (target as { local_port: number }).local_port;
+      if (port === 8080) fail("port_in_use", "port 8080 on this computer is in use");
+      const status: ForwardStatus = { local_port: port, open: 0, total: 0, failure: null };
+      forwards.set(`${id}/${forwardId}`, status);
+      return status;
+    },
+    forward_stop: ({ id, forwardId }) => void forwards.delete(`${id}/${forwardId}`),
+    forward_status: ({ id }) => {
+      const open: Record<string, ForwardStatus> = {};
+      for (const [key, status] of forwards) {
+        const [session, forward] = key.split("/");
+        if (session !== String(id)) continue;
+        if (Math.random() < 0.3) status.total += 1;
+        status.open = status.total > 0 ? Math.round(Math.random() * 2) : 0;
+        if (forward === "f-redis" && status.total > 0) {
+          status.failure = { code: "refused", detail: null, at: Date.now() };
+        }
+        open[forward] = { ...status };
+      }
+      return open;
+    },
 
     sftp_home: () => "/root",
     sftp_resolve: ({ path }) => path,

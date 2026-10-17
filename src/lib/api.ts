@@ -83,8 +83,35 @@ export interface HostView {
   os: HostOs | null;
   /** Shown before the others in its list. */
   pinned: boolean;
+  /** Ports of this computer that lead through the host's connection. */
+  forwards: PortForward[];
   created_at: number;
   updated_at: number;
+}
+
+/** A port on this computer that leads, through the host's connection, to an address as the server sees it (`ssh -L`). */
+export interface PortForward {
+  id: Id;
+  label: string;
+  local_port: number;
+  /** As the server sees it: `localhost` is the server itself. */
+  remote_host: string;
+  remote_port: number;
+  /** Opened along with every session to the host. */
+  auto: boolean;
+}
+
+/** A forward as entered; without an id it is a new one. */
+export type PortForwardInput = Omit<PortForward, "id"> & { id: Id | null };
+
+/** How an open forward is doing. */
+export interface ForwardStatus {
+  local_port: number;
+  /** Connections carried now, and since it was opened. */
+  open: number;
+  total: number;
+  /** Why the latest connection could not be put through, until one is. */
+  failure: { code: "refused" | "prohibited" | "timeout" | "closed" | "other"; detail: string | null; at: number } | null;
 }
 
 /** The other SSH clients hosts can be imported from. */
@@ -295,6 +322,8 @@ export interface HostInput {
   tags: string[];
   auth: HostAuthInput;
   startup_snippet_id: Id | null;
+  /** Left out, the host keeps the forwards it has. */
+  forwards?: PortForwardInput[];
 }
 
 export interface GroupInput {
@@ -522,6 +551,8 @@ export const api = {
   hostDuplicate: (id: Id, suffix: string) => invoke<HostView>("host_duplicate", { id, suffix }),
   hostMove: (id: Id, groupId: Id | null) => invoke<HostView>("host_move", { id, groupId }),
   hostPin: (id: Id, pinned: boolean) => invoke<HostView>("host_pin", { id, pinned }),
+  hostSetForwards: (id: Id, forwards: PortForwardInput[]) =>
+    invoke<HostView>("host_set_forwards", { id, forwards }),
   groupSave: (input: GroupInput) => invoke<Group>("group_save", { input }),
   groupDelete: (id: Id) => invoke<void>("group_delete", { id }),
 
@@ -615,6 +646,15 @@ export const api = {
   sessionAck: (id: number, bytes: number) => invoke<void>("session_ack", { id, bytes }),
   sessionClose: (id: number) => invoke<void>("session_close", { id }),
   sessionCloseAll: () => invoke<void>("session_close_all"),
+
+  // Ports forwarded through a terminal session's connection, by forward id.
+  forwardStart: (
+    id: number,
+    forwardId: Id,
+    target: { local_port: number; remote_host: string; remote_port: number },
+  ) => invoke<ForwardStatus>("forward_start", { id, forwardId, target }),
+  forwardStop: (id: number, forwardId: Id) => invoke<void>("forward_stop", { id, forwardId }),
+  forwardStatus: (id: number) => invoke<Record<Id, ForwardStatus>>("forward_status", { id }),
 
   // Remote files; `id` is the terminal session whose connection is used.
   sftpHome: (id: number) => invoke<string>("sftp_home", { id }),

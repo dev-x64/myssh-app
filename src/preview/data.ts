@@ -84,6 +84,7 @@ function host(
     startup_snippet_id: null,
     os,
     pinned: false,
+    forwards: [],
     created_at: now - 50 * day,
     updated_at: now - 2 * day,
     ...extra,
@@ -96,11 +97,19 @@ const alpine = { id: "alpine", family: null, name: "Alpine Linux v3.20" };
 const rocky = { id: "rocky", family: "rhel", name: "Rocky Linux 9.4 (Blue Onyx)" };
 
 const hosts: HostView[] = [
-  host("h-web1", "web-1", "203.0.113.10", "g-prod", ubuntu, { pinned: true, tags: ["nginx", "eu"] }),
+  host("h-web1", "web-1", "203.0.113.10", "g-prod", ubuntu, {
+    pinned: true,
+    tags: ["nginx", "eu"],
+    forwards: [
+      { id: "f-grafana", label: "Grafana", local_port: 3000, remote_host: "localhost", remote_port: 3000, auto: true },
+      { id: "f-redis", label: "", local_port: 6379, remote_host: "10.0.0.7", remote_port: 6379, auto: false },
+    ],
+  }),
   host("h-web2", "web-2", "203.0.113.11", "g-prod", ubuntu, { tags: ["nginx", "eu"] }),
   host("h-db", "db-primary", "203.0.113.20", "g-prod", debian, {
     auth: { kind: "identity", identity_id: "i-ops" },
     tags: ["postgres"],
+    forwards: [{ id: "f-pg", label: "Postgres", local_port: 5432, remote_host: "localhost", remote_port: 5432, auto: true }],
   }),
   host("h-stage", "staging", "stage.example.com", "g-stage", rocky, { port: 2222 }),
   host("h-pi", "raspberry", "192.168.1.40", "g-home", alpine, {
