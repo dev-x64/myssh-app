@@ -650,10 +650,10 @@ export function getSession(tabId: string): TermSession | undefined {
  * Opens a new terminal tab for the host; `run` is a snippet to run once it
  * is connected. Terminals given the same `group` share one tab.
  */
-export function openHost(hostId: Id, run: string | null = null, group: TabGroup | null = null) {
+export function openHost(hostId: Id, run: string | null = null, group: TabGroup | null = null): string | undefined {
   const host = useVault.getState().snapshot.hosts.find((h) => h.id === hostId);
-  if (!host) return;
-  openTab(hostId, hostTitle(host), run, group);
+  if (!host) return undefined;
+  return openTab(hostId, hostTitle(host), run, group);
 }
 
 /** Opens a new tab with a terminal on this computer. */
@@ -661,7 +661,7 @@ export function openLocal() {
   openTab(LOCAL_HOST_ID, t("local.title"));
 }
 
-function openTab(hostId: Id, title: string, run: string | null = null, group: TabGroup | null = null) {
+function openTab(hostId: Id, title: string, run: string | null = null, group: TabGroup | null = null): string {
   const id = `tab-${tabSeq++}`;
   sessions.set(id, new TermSession(id, hostId, run));
   useUi.getState().addTab({
@@ -688,6 +688,7 @@ function openTab(hostId: Id, title: string, run: string | null = null, group: Ta
     group,
     runState: null,
   });
+  return id;
 }
 
 /**
