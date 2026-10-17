@@ -1985,6 +1985,28 @@ button.link {
   font-size: 12px;
 }
 
+/* Two lines tall whatever it holds. */
+.password-card {
+  box-sizing: border-box;
+  height: 54px;
+  overflow: hidden;
+  line-height: 1.45;
+  align-content: center;
+}
+
+.password-card.idle {
+  opacity: 0.55;
+}
+
+.password-card p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  white-space: normal;
+}
+
 .password-card span {
   color: var(--text-3);
   font-style: italic;

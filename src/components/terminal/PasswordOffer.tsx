@@ -50,7 +50,8 @@ export function PasswordOffer({ tab }: { tab: Tab }) {
   if (!session || !offer) return null;
   const failedRow = rows.find((row) => row.kind === "saved" && row.choice.key === offer.failed);
   const focused = hovered >= 0 ? hovered : offer.index;
-  const shown = rows[focused];
+  // Nothing chosen yet: the first one, the likeliest, is shown faintly.
+  const card = rows[focused] ?? (rows[0]?.kind === "saved" ? rows[0] : null);
   return (
     <div
       ref={ref}
@@ -62,12 +63,19 @@ export function PasswordOffer({ tab }: { tab: Tab }) {
       {failedRow?.kind === "saved" && (
         <div className="password-refused">{t("term.password.failed_now", { name: failedRow.choice.label })}</div>
       )}
-      {shown?.kind === "saved" && (
-        <div className="password-card">
-          <span>{t("host.username")}:</span>
-          <b>{shown.choice.username}</b>
-          <span>{t("host.password")}:</span>
-          <b className="password-mask">••••••••••••</b>
+      {/* Always there and always as tall, so that pointing at another row never moves the rows under the pointer. */}
+      {card && (
+        <div className={cx("password-card", focused < 0 && "idle")}>
+          {card.kind === "saved" ? (
+            <>
+              <span>{t("host.username")}:</span>
+              <b>{card.choice.username}</b>
+              <span>{t("host.password")}:</span>
+              <b className="password-mask">••••••••••••</b>
+            </>
+          ) : (
+            <p>{t("term.password.add_card")}</p>
+          )}
         </div>
       )}
       <div className="suggest-list" onMouseLeave={() => setHovered(-1)}>
