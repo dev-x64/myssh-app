@@ -96,17 +96,59 @@ function hideLinkTip() {
 /** A line that asks for a password and waits on it: su, sudo, ssh, mysql -p… */
 const PASSWORD_PROMPT = /(?:password|passwort|kennwort|contraseña|mot de passe|пароль)[^:\n]{0,60}:\s*$/i;
 
-/** The password the host keeps (its own, or its identity's), if it keeps one. */
-export function savedPassword(hostId: Id): { username: string; fetch: () => Promise<string | null> } | null {
+/** The account a prompt asks the password of, when it says: `[sudo] password for admin:`. */
+const PROMPT_USER = /password for ([^\s:]+)\s*:\s*$/i;
+/** `su`, `su -`, `su - admin`, `su admin` at the end of the line above the prompt: whose password it wants. */
+const SU_COMMAND = /(?:^|[\s;&|])su(?:\s+-l?|\s+--login)?(?:\s+([a-z_][\w.-]*))?\s*$/i;
+
+/** A saved password that can be typed at a prompt. */
+export interface PasswordChoice {
+  key: string;
+  /** The host's name, or the identity's. */
+  label: string;
+  username: string;
+  /** The host's own (or its identity's): the one it signs in with. */
+  own: boolean;
+  fetch: () => Promise<string | null>;
+}
+
+/**
+ * Every saved password to offer at a prompt on this host: its own first,
+ * then the identities that keep one. Those of the account the prompt names
+ * come before the rest.
+ */
+export function passwordChoices(hostId: Id, user: string | null): PasswordChoice[] {
   const snapshot = useVault.getState().snapshot;
   const host = snapshot.hosts.find((h) => h.id === hostId);
-  if (!host) return null;
-  if (host.auth.kind === "inline") {
-    return host.auth.has_password ? { username: host.auth.username, fetch: () => api.hostPassword(host.id) } : null;
+  const ownIdentity = host?.auth.kind === "identity" ? host.auth.identity_id : null;
+  const choices: PasswordChoice[] = [];
+  if (host?.auth.kind === "inline" && host.auth.has_password) {
+    const id = host.id;
+    choices.push({ key: `host:${id}`, label: host.label, username: host.auth.username, own: true, fetch: () => api.hostPassword(id) });
   }
-  const identityId = host.auth.identity_id;
-  const identity = snapshot.identities.find((i) => i.id === identityId);
-  return identity?.has_password ? { username: identity.username, fetch: () => api.identityPassword(identity.id) } : null;
+  for (const identity of snapshot.identities) {
+    if (!identity.has_password) continue;
+    const id = identity.id;
+    choices.push({
+      key: `identity:${id}`,
+      label: identity.label || identity.username,
+      username: identity.username,
+      own: id === ownIdentity,
+      fetch: () => api.identityPassword(id),
+    });
+  }
+  const rank = (choice: PasswordChoice) => (user && choice.username === user ? 0 : choice.own ? 1 : 2);
+  return choices.sort((a, b) => rank(a) - rank(b));
+}
+
+/** The account a password saved from a prompt is for: the one it names, or the host's. */
+export function promptAccount(hostId: Id, user: string | null): string {
+  if (user) return user;
+  const snapshot = useVault.getState().snapshot;
+  const host = snapshot.hosts.find((h) => h.id === hostId);
+  if (host?.auth.kind === "inline") return host.auth.username;
+  const identityId = host?.auth.kind === "identity" ? host.auth.identity_id : null;
+  return snapshot.identities.find((i) => i.id === identityId)?.username ?? "";
 }
 
 /** How long the output has to pause before a snippet is looked at as maybe done. */
@@ -181,7 +223,9 @@ export class TermSession {
       }
       return true;
     });
-    this.term.attachCustomKeyEventHandler((event) => this.systemKey(event) && this.suggester.handleKey(event));
+    this.term.attachCustomKeyEventHandler(
+      (event) => this.systemKey(event) && this.passwordKey(event) && this.suggester.handleKey(event),
+    );
     this.term.onData((data) => this.onInput(data));
     this.term.onResize(({ cols, rows }) => {
       if (this.sessionId !== null) void api.sessionResize(this.sessionId, cols, rows).catch(() => {});
@@ -645,27 +689,85 @@ export class TermSession {
   }
 
   /**
-   * Offers the host's saved password when the shell's last line asks for
-   * one (su, sudo, ssh onwards…) with the cursor right after it. Nothing is
-   * sent unless the offer is taken.
+   * Offers the saved passwords when the shell's last line asks for one
+   * (su, sudo, passwd, ssh onwards…) with the cursor right after it.
+   * Nothing is sent unless one is chosen.
    */
   private lookForPasswordPrompt() {
     const tab = this.tab();
-    if (!tab || tab.status !== "connected" || this.hostId === LOCAL_HOST_ID) return;
+    if (!tab || tab.status !== "connected" || this.term.buffer.active.type !== "normal") return;
     const buffer = this.term.buffer.active;
     const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? "";
-    const asking = PASSWORD_PROMPT.test(line) && buffer.cursorX >= line.trimEnd().length && savedPassword(this.hostId) !== null;
-    const offer = asking ? { row: buffer.cursorY, col: buffer.cursorX } : null;
+    const at = `${buffer.baseY + buffer.cursorY}:${buffer.cursorX}`;
+    const asking = PASSWORD_PROMPT.test(line) && buffer.cursorX >= line.trimEnd().length && at !== this.passwordDismissed;
     const now = tab.passwordOffer ?? null;
-    if (offer?.row !== now?.row || offer?.col !== now?.col) this.patch({ passwordOffer: offer });
+    if (!asking) {
+      if (now) this.patch({ passwordOffer: null });
+      return;
+    }
+    if (now?.row === buffer.cursorY && now.col === buffer.cursorX) return;
+    const above = buffer.getLine(buffer.baseY + buffer.cursorY - 1)?.translateToString(true) ?? "";
+    const su = SU_COMMAND.exec(above);
+    const user = PROMPT_USER.exec(line)?.[1] ?? (su ? (su[1] ?? "root") : null);
+    this.patch({ passwordOffer: { row: buffer.cursorY, col: buffer.cursorX, index: -1, user } });
   }
 
-  /** Types the host's saved password at the prompt asking for it, and Enter. Never kept in the history. */
-  async typeSavedPassword() {
-    const saved = savedPassword(this.hostId);
+  /** The arrows choose among the passwords offered, Enter types the chosen one, Escape puts them away. */
+  private passwordKey(event: KeyboardEvent): boolean {
+    const offer = this.tab()?.passwordOffer;
+    if (!offer || event.type !== "keydown" || event.metaKey || event.ctrlKey || event.altKey) return true;
+    // The saved ones, and adding one.
+    const rows = passwordChoices(this.hostId, offer.user).length + 1;
+    const consume = () => {
+      event.preventDefault();
+      return false;
+    };
+    switch (event.key) {
+      case "ArrowDown":
+        this.patch({ passwordOffer: { ...offer, index: Math.min(offer.index + 1, rows - 1) } });
+        return consume();
+      case "ArrowUp":
+        this.patch({ passwordOffer: { ...offer, index: Math.max(offer.index - 1, -1) } });
+        return consume();
+      case "Enter":
+        if (offer.index < 0) return true;
+        this.choosePassword(offer.index);
+        return consume();
+      case "Escape":
+        this.dismissPassword();
+        return consume();
+      default:
+        return true;
+    }
+  }
+
+  private passwordDismissed: string | null = null;
+
+  /** The offer is put away, and does not come back for this prompt. */
+  dismissPassword() {
+    const buffer = this.term.buffer.active;
+    this.passwordDismissed = `${buffer.baseY + buffer.cursorY}:${buffer.cursorX}`;
     this.patch({ passwordOffer: null });
-    if (!saved) return;
-    const password = await saved.fetch().catch(() => null);
+  }
+
+  /** A row of the offer was chosen: a saved password is typed, or one is added. */
+  choosePassword(index: number) {
+    const offer = this.tab()?.passwordOffer;
+    if (!offer) return;
+    const choice = passwordChoices(this.hostId, offer.user)[index];
+    if (choice) void this.typePassword(choice.fetch);
+    else this.patch({ passwordAdd: { username: promptAccount(this.hostId, offer.user) } });
+  }
+
+  /**
+   * Types a saved password at the prompt asking for it, and Enter, as long
+   * as that prompt is still waiting. It never goes into the history.
+   */
+  async typePassword(fetch: () => Promise<string | null>) {
+    const offer = this.tab()?.passwordOffer;
+    if (!offer) return;
+    this.patch({ passwordOffer: null });
+    const password = await fetch().catch(() => null);
     if (!password || this.tab()?.status !== "connected") return;
     this.suggester.reset();
     this.type(`${password}\r`);

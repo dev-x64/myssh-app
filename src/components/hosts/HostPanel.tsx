@@ -42,6 +42,8 @@ export function SecretField(props: {
   onChange: (value: SecretInput) => void;
   placeholder?: string;
   reveal?: () => Promise<string | null>;
+  /** Takes the focus when its dialog opens. */
+  autoFocus?: boolean;
 }) {
   const t = useT();
   const [shown, setShown] = useState<string | null>(null);
@@ -98,6 +100,7 @@ export function SecretField(props: {
   }
   return (
     <PasswordInput
+      data-autofocus={props.autoFocus || undefined}
       placeholder={props.placeholder}
       value={props.value.action === "set" ? props.value.value : ""}
       onChange={(e) => props.onChange({ action: "set", value: e.target.value })}

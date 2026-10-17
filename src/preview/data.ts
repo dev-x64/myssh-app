@@ -62,6 +62,14 @@ const identities: IdentityView[] = [
     key_id: "k-main",
     created_at: now - 70 * day,
     updated_at: now - 7 * day,
+  },  {
+    id: "i-deploy",
+    label: "deploy",
+    username: "deploy",
+    has_password: true,
+    key_id: null,
+    created_at: now - 30 * day,
+    updated_at: now - 30 * day,
   },
 ];
 

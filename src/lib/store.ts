@@ -130,8 +130,14 @@ export interface Tab {
   reconnect: { attempt: number; at: number; network?: boolean } | null;
   /** The connection is being asked whether it still answers (the network changed). */
   checking?: boolean;
-  /** The shell asks for a password on this cell, and the host has one saved to offer. */
-  passwordOffer?: { row: number; col: number } | null;
+  /**
+   * The shell asks for a password on this cell: the saved ones are offered
+   * there. `index` is the row chosen with the arrows (-1: none), `user` the
+   * account the prompt names (`[sudo] password for admin:`), if it names one.
+   */
+  passwordOffer?: { row: number; col: number; index: number; user: string | null } | null;
+  /** A password is being saved from that offer, for this account; it is typed once saved. */
+  passwordAdd?: { username: string } | null;
   /** Automatic reconnection gave up after this many attempts. */
   gaveUp: number | null;
   searchOpen: boolean;
