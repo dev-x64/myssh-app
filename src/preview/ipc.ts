@@ -279,7 +279,7 @@ export function createHandler(scenario: Scenario) {
       { dns: "nas.tail1234.ts.net", name: "nas", ips: ["100.101.1.4"], online: false, ssh: false },
     ],
     // Other SSH clients, as if found on this computer.
-    import_scan: () => [
+    import_scan: () => !scenario.found ? [] : [
       {
         kind: "tailscale",
         location: "tailscale status",
@@ -499,8 +499,12 @@ export function createHandler(scenario: Scenario) {
     forward_start: async ({ id, forwardId, target }) => {
       await later(250);
       const port = (target as { local_port: number }).local_port;
-      if (port === 8080) fail("port_in_use", "port 8080 on this computer is in use");
-      const status: ForwardStatus = { local_port: port, open: 0, total: 0, failure: null };
+      if (scenario.forwards === "busy") fail("port_in_use", `port ${port} on this computer is in use`);
+      // Nothing answering is seen at the first connection, which comes at once here.
+      const status: ForwardStatus =
+        scenario.forwards === "refused"
+          ? { local_port: port, open: 0, total: 1, failure: { code: "refused", detail: null, at: Date.now() } }
+          : { local_port: port, open: 0, total: 0, failure: null };
       forwards.set(`${id}/${forwardId}`, status);
       return status;
     },
@@ -512,8 +516,9 @@ export function createHandler(scenario: Scenario) {
         if (session !== String(id)) continue;
         if (Math.random() < 0.3) status.total += 1;
         status.open = status.total > 0 ? Math.round(Math.random() * 2) : 0;
-        if (forward === "f-redis" && status.total > 0) {
+        if (scenario.forwards === "refused" && status.total > 0) {
           status.failure = { code: "refused", detail: null, at: Date.now() };
+          status.open = 0;
         }
         open[forward] = { ...status };
       }

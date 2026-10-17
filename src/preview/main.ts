@@ -11,10 +11,12 @@ import { loadScenario } from "./scenario";
 const scenario = loadScenario();
 
 // Read once, as the app starts: the system it believes it runs on.
-if (scenario.os === "windows") {
-  Object.defineProperty(navigator, "userAgent", {
-    value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MySSH-preview",
-  });
+const AGENTS = {
+  windows: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MySSH-preview",
+  linux: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) MySSH-preview",
+};
+if (scenario.os !== "mac") {
+  Object.defineProperty(navigator, "userAgent", { value: AGENTS[scenario.os] });
 }
 
 // A fresh browser starts past the first-launch setup, so that pictures show

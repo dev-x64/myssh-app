@@ -11,19 +11,21 @@ const LABELS: { [K in keyof Scenario]?: [string, Record<string, string>] } = {
   update: ["Обновление", { none: "нет", available: "есть", rollback: "откат" }],
   offline: ["Сервер", { false: "доступен", true: "офлайн" }],
   vaultError: ["Хранилище не открылось", { false: "нет", true: "да" }],
-  os: ["Система", { mac: "macOS", windows: "Windows" }],
+  os: ["Система", { mac: "macOS", windows: "Windows", linux: "Linux" }],
   ai: ["AI-подсказки", { on: "отвечают", limited: "лимит", off: "выключены" }],
+  forwards: ["Переброска портов", { ok: "работает", busy: "порт занят", refused: "нет ответа" }],
+  found: ["Хосты для импорта", { true: "найдены", false: "нет" }],
 };
 
 const CSS = `
 .preview-panel{position:fixed;right:10px;bottom:10px;display:flex;flex-direction:column;align-items:flex-end;z-index:100000;font:12px/1.35 -apple-system,system-ui,sans-serif;color:#e6e9ee}
 .preview-panel>button.preview-toggle{all:unset;cursor:pointer;padding:5px 10px;border-radius:999px;background:#7c3aed;color:#fff;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.35)}
-.preview-body{margin-bottom:8px;width:310px;padding:10px 12px;border-radius:10px;background:rgba(18,20,26,.97);border:1px solid #3a3f4b;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.preview-body{margin-bottom:8px;width:370px;padding:10px 12px;border-radius:10px;background:rgba(18,20,26,.97);border:1px solid #3a3f4b;box-shadow:0 10px 30px rgba(0,0,0,.45)}
 .preview-body h4{margin:0 0 6px;font-size:12px;color:#a78bfa}
 .preview-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0}
 .preview-row>span{color:#9aa3b2;flex:none}
 .preview-seg{display:flex;gap:2px;background:#232833;border-radius:6px;padding:2px}
-.preview-seg button{all:unset;cursor:pointer;padding:2px 7px;border-radius:4px;color:#c5cad3}
+.preview-seg button{all:unset;cursor:pointer;padding:2px 7px;border-radius:4px;color:#c5cad3;white-space:nowrap}
 .preview-seg button.on{background:#7c3aed;color:#fff}
 .preview-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .preview-actions button{all:unset;cursor:pointer;padding:3px 8px;border-radius:5px;background:#232833;color:#c5cad3}

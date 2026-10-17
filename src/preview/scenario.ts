@@ -15,11 +15,15 @@ export interface Scenario {
   vaultError: boolean;
   /** The cloud server cannot be reached. */
   offline: boolean;
-  os: "mac" | "windows";
+  os: "mac" | "windows" | "linux";
   /** The preview's own panel is shown. */
   panel: boolean;
   /** AI suggestions: answering, used up, or switched off on the server. */
   ai: "on" | "limited" | "off";
+  /** Forwarded ports: they work, the port here is taken, or nothing answers on the server's side. */
+  forwards: "ok" | "busy" | "refused";
+  /** Other apps on this computer hold hosts to import (the setup offers them), or none. */
+  found: boolean;
 }
 
 const KEY = "myssh.preview";
@@ -34,6 +38,8 @@ const DEFAULTS: Scenario = {
   os: "mac",
   panel: true,
   ai: "on",
+  forwards: "ok",
+  found: true,
 };
 
 export const CHOICES: { [K in keyof Scenario]: Scenario[K][] } = {
@@ -43,9 +49,11 @@ export const CHOICES: { [K in keyof Scenario]: Scenario[K][] } = {
   update: ["none", "available", "rollback"],
   vaultError: [false, true],
   offline: [false, true],
-  os: ["mac", "windows"],
+  os: ["mac", "windows", "linux"],
   panel: [true, false],
   ai: ["on", "limited", "off"],
+  forwards: ["ok", "busy", "refused"],
+  found: [true, false],
 };
 
 function parse<K extends keyof Scenario>(key: K, text: string): Scenario[K] | undefined {
