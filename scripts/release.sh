@@ -46,10 +46,13 @@
 # half done. A run during which the sources were edited fails too: what it
 # built cannot be trusted.
 #
-# Publishing is done by hand, on the cloud server's panel: open
-# <cloud server>/admin/updates, choose the files of release/<version>/ and
-# upload them, then make the version current. Installed apps are offered
-# it from that moment.
+# Publishing is done on the cloud server's panel. With the token made on
+# its settings page ("Выпуски" tab) saved in ~/.myssh/panel-token, this
+# script uploads release/<version>/ there itself (scripts/release-upload.py)
+# and names the page to look it over on; without it, open
+# <cloud server>/admin/updates and upload the files by hand. Either way the
+# version reaches nobody until it is sent from that page: installed apps
+# are offered it from that moment.
 #
 # The Mac app and its disk image are signed with the Apple Developer ID
 # certificate in the keychain ("Developer ID Application: ..."), and then
@@ -91,6 +94,8 @@
 #                         Microsoft Store, into release/<version>/store/
 #                         (see scripts/windows-store.sh). That one is built
 #                         without the release key: the store updates it.
+#   MYSSH_PANEL_TOKEN     the panel's token for uploading releases
+#                         (default: the contents of ~/.myssh/panel-token)
 #   MYSSH_RELEASE_GITHUB  "yes" also publishes the files as a release in
 #                         the repository named by updates.repo in
 #                         app.config.json (needs the GitHub CLI). Test
@@ -112,6 +117,9 @@ KEY="${MYSSH_UPDATER_KEY:-$HOME/.myssh/updater.key}"
 MAC_TARGET="universal-apple-darwin"
 ARCH="universal"
 TIMES="$HOME/.myssh/release-times"
+# The panel's token for uploading a release: with it, this script uploads.
+PANEL_TOKEN=""
+[ -z "${MYSSH_PANEL_TOKEN:-}" ] && [ ! -s "$HOME/.myssh/panel-token" ] || PANEL_TOKEN="yes"
 
 case "${1:-}" in
   -h | --help)
@@ -502,6 +510,11 @@ if [ -n "$MENU" ]; then
     ok "Docker запущен: можно собрать и для Linux"
   else
     warn "Docker не запущен: для Linux собрать не выйдет (OrbStack или Docker Desktop)"
+  fi
+  if [ -n "$PANEL_TOKEN" ]; then
+    ok "токен панели на месте: собранное загрузится на панель само"
+  else
+    warn "нет токена панели: файлы придётся загружать вручную (токен — на панели: Настройки → Выпуски → в ~/.myssh/panel-token)"
   fi
   if [ -n "$SIGNED" ]; then
     ok "сертификат для Windows на месте"
@@ -1060,29 +1073,52 @@ echo "${G}${B}Готово: MySSH $VERSION за $(minutes "$TOOK").${R}"
 echo "Файлы в $OUT/:"
 ls -lh "$OUT" | tail -n +2 | awk '{ printf "  %-6s %s\n", $5, $9 }'
 echo "Коммит «Release ${VERSION}» и тег v$VERSION — только локально."
+
+# Uploaded, not sent: that is for the owner, on the page it names.
+LOOK_OVER=""
+if [ -n "$PANEL_TOKEN" ]; then
+  echo
+  echo "${B}release: загрузка на панель${R} ${D}($SERVER)${R}"
+  if LOOK_OVER="$(python3 -B scripts/release-upload.py "$SERVER" "$OUT")"; then
+    echo "  ${G}✓${R} загружено; отправить можно здесь: $LOOK_OVER"
+  else
+    LOOK_OVER=""
+    echo "  ${Y}!${R} не загрузилось — загрузи файлы вручную на $SERVER/admin/updates" >&2
+  fi
+fi
 notify "MySSH $VERSION собрана"
 
 if [ -z "$MENU" ]; then
   echo
-  echo "Чтобы выпустить: открой $SERVER/admin/updates, загрузи файлы из $OUT/ и сделай $VERSION текущей."
+  if [ -n "$LOOK_OVER" ]; then
+    echo "Чтобы выпустить: открой $LOOK_OVER, проверь и нажми «Отправить»."
+  else
+    echo "Чтобы выпустить: открой $SERVER/admin/updates, загрузи файлы из $OUT/ и сделай $VERSION текущей."
+  fi
   [ -z "$STORE" ] || echo "Для Microsoft Store: отправь $STORE в Partner Center."
   exit 0
 fi
 
 # ------------------------------------------------------- what comes next ---
 echo
-echo "${B}Что осталось:${R} загрузить файлы на панели ($SERVER/admin/updates) и сделать $VERSION текущей —"
+if [ -n "$LOOK_OVER" ]; then
+  echo "${B}Что осталось:${R} проверить $VERSION на панели и нажать «Отправить» —"
+  PANEL="Проверить и отправить на панели  ${D}$LOOK_OVER${R}"
+  FINDER="Показать файлы в Finder"
+else
+  echo "${B}Что осталось:${R} загрузить файлы на панели ($SERVER/admin/updates) и сделать $VERSION текущей —"
+  PANEL="Открыть панель обновлений  ${D}$SERVER/admin/updates${R}"
+  FINDER="Показать файлы в Finder  ${D}их и нужно загрузить${R}"
+fi
 echo "тогда установленные копии предложат обновиться."
 [ -z "$STORE" ] || echo "Для Microsoft Store: отправить $STORE в Partner Center."
-PANEL="Открыть панель обновлений  ${D}$SERVER/admin/updates${R}"
-FINDER="Показать файлы в Finder  ${D}их и нужно загрузить${R}"
 PUSH="Отправить в GitHub  ${D}git push и тег v$VERSION${R}"
 while :; do
   choose "Что дальше?" 0 "$PANEL" "$FINDER" "$PUSH" "Выйти"
   case "$CHOICE" in
     0)
-      open "$SERVER/admin/updates" || true
-      PANEL="${G}✓${R} Открыть панель обновлений"
+      open "${LOOK_OVER:-$SERVER/admin/updates}" || true
+      PANEL="${G}✓${R} ${PANEL%%  *}"
       ;;
     1)
       open "$OUT" || true
