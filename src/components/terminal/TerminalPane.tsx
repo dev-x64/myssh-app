@@ -32,6 +32,7 @@ import { PromptDialog } from "./PromptDialog";
 import { ShareBar } from "./SharePanel";
 import { LocalIntro } from "./LocalIntro";
 import { Tip } from "../Tip";
+import { TypingDemo } from "./TypingDemo";
 import { keyOf } from "../../lib/shortcuts";
 import { SnippetsPanel } from "./SnippetsPanel";
 import { StatsLine, useServerStats } from "./StatsBar";
@@ -451,7 +452,7 @@ export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
       {tab.searchOpen && <SearchBox tab={tab} />}
 
       {active && !isLocalTab(tab) && tab.status === "connected" && !tab.files && !tab.editor && (
-        <Tip id="terminal" title={t("tip.terminal.title")} className="tip-float">
+        <Tip id="terminal" title={t("tip.terminal.title")} className="tip-float" art={<TypingDemo />}>
           {t("tip.terminal.text", { files: keyOf("files"), snippets: keyOf("snippets"), find: keyOf("find") })}
         </Tip>
       )}

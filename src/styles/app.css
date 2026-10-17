@@ -7818,3 +7818,239 @@ html[data-theme="light"] .welcome-glow i:last-child {
     opacity: 1;
   }
 }
+
+/* ------------------------------------------ suggestions, as they are used --- */
+
+/* 5 s: "doc" is typed (5–25%), the list opens (25–58%), ↓ moves to the
+   second command (42%), Tab puts it on the line (58%), and it stays there. */
+.tt-demo {
+  position: relative;
+  margin: 6px 0 4px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.tt-line {
+  display: flex;
+  align-items: center;
+  white-space: pre;
+}
+
+.tt-prompt {
+  color: var(--ok);
+}
+
+.tt-typed,
+.tt-rest {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.tt-typed {
+  width: 0;
+  animation: tt-type 5s steps(1) infinite;
+}
+
+.tt-rest {
+  max-width: 0;
+  color: var(--text);
+  animation: tt-rest 5s steps(1) infinite;
+}
+
+.tt-cursor {
+  width: 7px;
+  height: 13px;
+  margin-left: 1px;
+  background: var(--text-2);
+  animation: tt-blink 1s steps(1) infinite;
+}
+
+.tt-list {
+  width: max-content;
+  margin: 5px 0 0 3ch;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bg-3);
+  opacity: 0;
+  animation: tt-list 5s ease-out infinite;
+}
+
+.tt-item {
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--text-2);
+}
+
+.tt-item.a1 {
+  animation: tt-a1 5s steps(1) infinite;
+}
+
+.tt-item.a2 {
+  animation: tt-a2 5s steps(1) infinite;
+}
+
+.tt-keys {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  gap: 5px;
+}
+
+.tt-key {
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--bg-2);
+  color: var(--text-3);
+  font: 600 10.5px var(--font);
+}
+
+.tt-key.k1 {
+  animation: tt-k1 5s ease-out infinite;
+}
+
+.tt-key.k2 {
+  animation: tt-k2 5s ease-out infinite;
+}
+
+@keyframes tt-type {
+  0%,
+  5% {
+    width: 0;
+  }
+  10% {
+    width: 1ch;
+  }
+  16% {
+    width: 2ch;
+  }
+  22%,
+  100% {
+    width: 3ch;
+  }
+}
+
+@keyframes tt-rest {
+  0%,
+  58% {
+    max-width: 0;
+  }
+  59%,
+  100% {
+    max-width: 30ch;
+  }
+}
+
+@keyframes tt-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes tt-list {
+  0%,
+  25% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  28%,
+  56% {
+    opacity: 1;
+    transform: none;
+  }
+  59%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tt-a1 {
+  0%,
+  25% {
+    background: none;
+  }
+  26%,
+  42% {
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+  43%,
+  100% {
+    background: none;
+  }
+}
+
+@keyframes tt-a2 {
+  0%,
+  42% {
+    background: none;
+  }
+  43%,
+  58% {
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+  59%,
+  100% {
+    background: none;
+  }
+}
+
+@keyframes tt-k1 {
+  0%,
+  38%,
+  48%,
+  100% {
+    border-color: var(--line-strong);
+    color: var(--text-3);
+    box-shadow: none;
+  }
+  41%,
+  45% {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+}
+
+@keyframes tt-k2 {
+  0%,
+  54%,
+  64%,
+  100% {
+    border-color: var(--line-strong);
+    color: var(--text-3);
+    box-shadow: none;
+  }
+  57%,
+  61% {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+}
+
+/* Still: the line as it ends, with the command on it. */
+@media (prefers-reduced-motion: reduce) {
+  .tt-typed,
+  .tt-rest,
+  .tt-list,
+  .tt-item,
+  .tt-key,
+  .tt-cursor {
+    animation: none;
+  }
+  .tt-typed {
+    width: 3ch;
+  }
+  .tt-rest {
+    max-width: 30ch;
+  }
+}

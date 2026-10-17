@@ -12,7 +12,14 @@ export type TipId = "hosts" | "terminal" | "files" | "forwards" | "keychain" | "
  * is understood, then never again. All of them can be turned off at once,
  * here or in Settings, and brought back from there.
  */
-export function Tip(props: { id: TipId; title: string; children: ReactNode; className?: string }) {
+export function Tip(props: {
+  id: TipId;
+  title: string;
+  children: ReactNode;
+  className?: string;
+  /** A small drawing of the thing being explained, above the words. */
+  art?: ReactNode;
+}) {
   const t = useT();
   const shown = useSettings((s) => s.tips && !s.tipsSeen.includes(props.id));
   if (!shown) return null;
@@ -27,6 +34,7 @@ export function Tip(props: { id: TipId; title: string; children: ReactNode; clas
       </span>
       <div className="tip-body">
         <b>{props.title}</b>
+        {props.art}
         <div className="tip-text">{props.children}</div>
         <div className="tip-actions">
           <button type="button" className="btn small" onClick={seen}>
