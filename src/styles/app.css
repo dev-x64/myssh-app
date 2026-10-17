@@ -7458,22 +7458,32 @@ html[data-theme="light"] .welcome-glow i:last-child {
 /* ------------------------------------------------------ tips for newcomers --- */
 
 /* A short note where it is first needed, with a way to put it, or all of
-   them, away. It rises into place rather than appearing at once. */
+   them, away. It rises into place rather than appearing at once. The title
+   and the ways to put it away share a line; the words under them stay
+   short enough to read in one go. Where it is narrow, the ways to put it
+   away go under the words. */
 .tip {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
+  container-type: inline-size;
   margin-bottom: 14px;
-  padding: 12px 38px 12px 13px;
-  border: 1px solid var(--accent-line);
+  padding: 11px 12px 12px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-l);
-  background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--bg-2);
+  background: var(--bg-2);
   animation: tip-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+.tip-grid {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "icon title actions"
+    "icon body body";
+  column-gap: 11px;
+  row-gap: 2px;
+}
+
 .tip-icon {
-  flex: none;
+  grid-area: icon;
   display: grid;
   place-items: center;
   width: 28px;
@@ -7483,29 +7493,33 @@ html[data-theme="light"] .welcome-glow i:last-child {
   color: var(--accent);
 }
 
-.tip-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.tip-body b {
+.tip-title {
+  grid-area: title;
+  align-self: center;
   font-size: 13px;
   font-weight: 650;
 }
 
+.tip-body {
+  grid-area: body;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 .tip-text {
+  max-width: 72ch;
   color: var(--text-2);
   font-size: 12.5px;
   line-height: 1.5;
 }
 
 .tip-actions {
+  grid-area: actions;
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-top: 6px;
+  gap: 12px;
 }
 
 .tip-actions .link-button {
@@ -7513,10 +7527,18 @@ html[data-theme="light"] .welcome-glow i:last-child {
   font-size: 12px;
 }
 
-.tip-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+@container (max-width: 520px) {
+  .tip-actions {
+    grid-area: auto;
+    grid-column: 2 / -1;
+    margin-top: 8px;
+  }
+
+  .tip-grid {
+    grid-template-areas:
+      "icon title title"
+      "icon body body";
+  }
 }
 
 /* Over the terminal: in a corner, out of the way of the prompt. */

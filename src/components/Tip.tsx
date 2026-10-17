@@ -1,4 +1,4 @@
-import { Lightbulb, X } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 import type { ReactNode } from "react";
 import { useT } from "../lib/i18n";
 import { useSettings } from "../lib/settings";
@@ -9,7 +9,8 @@ export type TipId = "hosts" | "terminal" | "files" | "forwards" | "keychain" | "
 
 /**
  * A word for someone new, where they are about to need it: shown until it
- * is understood, then never again. All of them can be turned off at once,
+ * is understood, then never again. Quiet beside the page's own actions:
+ * only its bulb is in the accent colour. All of them can be turned off at once,
  * here or in Settings, and brought back from there.
  */
 export function Tip(props: {
@@ -29,13 +30,11 @@ export function Tip(props: {
   };
   return (
     <div className={cx("tip", props.className)} role="note">
-      <span className="tip-icon">
-        <Lightbulb size={15} />
-      </span>
-      <div className="tip-body">
-        <b>{props.title}</b>
-        {props.art}
-        <div className="tip-text">{props.children}</div>
+      <div className="tip-grid">
+        <span className="tip-icon">
+          <Lightbulb size={15} />
+        </span>
+        <b className="tip-title">{props.title}</b>
         <div className="tip-actions">
           <button type="button" className="btn small" onClick={seen}>
             {t("tip.ok")}
@@ -44,10 +43,11 @@ export function Tip(props: {
             {t("tip.off")}
           </button>
         </div>
+        <div className="tip-body">
+          {props.art}
+          <div className="tip-text">{props.children}</div>
+        </div>
       </div>
-      <button type="button" className="btn ghost icon small tip-close" aria-label={t("common.close")} onClick={seen}>
-        <X size={13} />
-      </button>
     </div>
   );
 }

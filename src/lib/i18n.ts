@@ -372,7 +372,7 @@ const en = {
   "tip.terminal.text": "Start typing and suggestions appear: ↓ to pick, Tab to insert. A request in plain words turns into a command with AI. Up top: the folder opens this server's files ({files}), the next button Snippets ({snippets}), and the cable Port forwarding. {find} searches the output.",
   "tip.files.title": "Files on both sides",
   "tip.files.text": "This Mac is on the left, the server on the right. Drag files from one side to the other, or press F5. Double-click a file on the server to edit it right here. Esc takes you back to the terminal.",
-  "tip.forwards.title": "Using Port forwarding",
+  "tip.forwards.title": "How to use Port forwarding",
   "tip.forwards.text": "Press Open, and programs on this Mac reach the service at localhost and its port: point a database app or the browser there. Forwards marked auto open by themselves with every connection.",
   "tip.keychain.title": "Signing in without a password",
   "tip.keychain.text": "Create a key, then press Install on servers: MySSH adds it to the hosts you pick and checks each one. From then on they let you in with the key, no password needed.",
