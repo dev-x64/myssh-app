@@ -4422,7 +4422,8 @@ html[data-theme="light"] .welcome-glow i:last-child {
 .fwd-diagram {
   display: flex;
   align-items: center;
-  padding: 16px 12px;
+  gap: 4px;
+  padding: 18px 8px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-l);
   background: var(--bg-1);
@@ -4445,7 +4446,7 @@ html[data-theme="light"] .welcome-glow i:last-child {
 .fwd-node b {
   max-width: 100%;
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4465,9 +4466,10 @@ html[data-theme="light"] .welcome-glow i:last-child {
 
 .fwd-link {
   position: relative;
-  flex: 0 0 34px;
+  flex: 0 0 30px;
   height: 2px;
   margin-bottom: 26px;
+  border-radius: 2px;
   background: var(--line-strong);
 }
 
@@ -4481,23 +4483,217 @@ html[data-theme="light"] .welcome-glow i:last-child {
   border-right: none;
 }
 
+/* The SSH stretch is a tunnel: a thicker pipe whose stripes run along it. */
 .fwd-link.ssh {
-  background: var(--accent);
+  height: 6px;
+  margin-top: -2px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--accent) 85%, transparent) 0 6px,
+      color-mix(in srgb, var(--accent) 40%, transparent) 6px 10px
+    );
+  background-size: 20px 100%;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent);
+  animation: fwd-stripes 0.9s linear infinite;
 }
 
 .fwd-link.ssh::after {
+  top: -2px;
   border-left-color: var(--accent);
 }
 
-.fwd-link span {
+.fwd-link-label {
   position: absolute;
-  top: -17px;
+  top: -19px;
   left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 3px;
   transform: translateX(-50%);
   color: var(--accent);
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
+}
+
+/* Packets travel from this Mac to the server, then on to the service. */
+.fwd-packet {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px var(--accent), 0 0 2px #fff;
+  opacity: 0;
+  animation: fwd-travel 2.4s ease-in-out infinite;
+}
+
+.fwd-packet.next {
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+  animation-delay: 1.2s;
+}
+
+.fwd-packet.late {
+  animation-delay: 1.2s;
+}
+
+.fwd-packet.next.late {
+  animation-delay: 2.4s;
+}
+
+.fwd-diagram.idle .fwd-packet {
+  display: none;
+}
+
+.fwd-diagram.idle .fwd-link.ssh {
+  animation: none;
+  opacity: 0.55;
+}
+
+/* A part just changed says so with a short glow. */
+.fwd-node {
+  animation: fwd-pop 0.45s ease-out;
+}
+
+.fwd-node:nth-child(5) svg {
+  color: var(--ok);
+}
+
+@keyframes fwd-stripes {
+  to {
+    background-position: 20px 0;
+  }
+}
+
+@keyframes fwd-travel {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    left: 100%;
+    opacity: 1;
+  }
+  55%,
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes fwd-pop {
+  0% {
+    transform: scale(0.9);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  40% {
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 55%, transparent));
+  }
+  100% {
+    transform: scale(1);
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fwd-link.ssh,
+  .fwd-node {
+    animation: none;
+  }
+  .fwd-packet {
+    display: none;
+  }
+}
+
+/* The chosen host, and the list to choose it from. */
+.fwd-host-button,
+.fwd-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fwd-host-button:hover,
+.fwd-picker-row:hover {
+  border-color: var(--line-strong);
+  background: var(--bg-2);
+}
+
+.fwd-host-button > svg {
+  color: var(--text-3);
+}
+
+.fwd-host-button .card-icon,
+.fwd-picker-row .card-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.fwd-host-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fwd-host-text b {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fwd-host-text span {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fwd-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px 12px;
+}
+
+.fwd-picker-head .search {
+  width: auto;
+}
+
+.fwd-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fwd-picker-row {
+  border-color: transparent;
+  background: none;
+}
+
+.fwd-picker-row.on {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
 }
 
 .fwd-explain {

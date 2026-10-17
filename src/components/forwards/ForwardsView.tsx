@@ -1,4 +1,4 @@
-import { ArrowRight, Cable, Database, Laptop, Pencil, Play, Plus, Search, Server, Square, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Cable, ChevronRight, Database, Laptop, Lock, Pencil, Play, Plus, Search, Server, Square, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mutate } from "../../lib/actions";
 import { api, type HostView, type Id, type PortForward, type PortForwardInput } from "../../lib/api";
@@ -6,7 +6,9 @@ import { closeForward, openForward, refreshForwards, useForwards, type OpenForwa
 import { errorText, useT, type T } from "../../lib/i18n";
 import { LINUX } from "../../lib/platform";
 import { openHost } from "../../lib/sessions";
-import { hostTitle, useUi, useVault, type Tab } from "../../lib/store";
+import { groupOptions } from "../hosts/HostPanel";
+import { OsIcon } from "../hosts/OsIcon";
+import { compareHosts, hostSubtitle, hostTitle, useUi, useVault, type Tab } from "../../lib/store";
 import { cx, Empty } from "../ui";
 
 /** How often the page asks how the open forwards are doing. */
@@ -296,8 +298,9 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
   const [localTouched, setLocalTouched] = useState(f !== undefined);
   const [auto, setAuto] = useState(f?.auto ?? false);
   const [busy, setBusy] = useState(false);
-  const first = useRef<HTMLSelectElement>(null);
-  useEffect(() => first.current?.focus(), []);
+  // Choosing the host takes the whole panel, as a list to search.
+  const [picking, setPicking] = useState(props.entry === null && props.hosts.length > 1);
+  const snapshot = useVault((s) => s.snapshot);
 
   const host = props.hosts.find((h) => h.id === hostId);
   const remote = portOf(remotePort);
@@ -358,8 +361,8 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
     if (done) props.onClose();
   };
 
-  const shownLocal = local ?? "…";
-  const shownTarget = `${remoteHost.trim() || "localhost"}:${remote ?? "…"}`;
+  const shownLocal = local ?? "—";
+  const shownTarget = `${remoteHost.trim() || "localhost"}:${remote ?? "—"}`;
 
   return (
     <form
@@ -382,27 +385,47 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
         </button>
       </div>
 
+      {picking ? (
+        <HostPicker
+          hosts={props.hosts}
+          current={hostId}
+          onBack={host ? () => setPicking(false) : props.onClose}
+          onPick={(id) => {
+            setHostId(id);
+            setPicking(false);
+          }}
+        />
+      ) : (
+      <>
       <div className="panel-body scroll">
-        <div className="fwd-diagram" aria-hidden="true">
-          <div className="fwd-node">
+        <div className={cx("fwd-diagram", remote === null && "idle")} aria-hidden="true">
+          <div className="fwd-node" key={`mac-${shownLocal}`}>
             <Laptop size={18} />
             <b>{t("fwd.diagram.mac")}</b>
             <span>:{shownLocal}</span>
           </div>
           <div className="fwd-link ssh">
-            <span>SSH</span>
+            <span className="fwd-link-label">
+              <Lock size={9} />
+              SSH
+            </span>
+            <i className="fwd-packet" />
+            <i className="fwd-packet late" />
           </div>
-          <div className="fwd-node">
+          <div className="fwd-node" key={`host-${hostId}`}>
             <Server size={18} />
             <b>{host ? hostTitle(host) : "…"}</b>
             <span>{t("fwd.diagram.server")}</span>
           </div>
-          <div className="fwd-link" />
-          <div className="fwd-node">
+          <div className="fwd-link">
+            <i className="fwd-packet next" />
+            <i className="fwd-packet next late" />
+          </div>
+          <div className="fwd-node" key={`svc-${remoteHost.trim()}-${remote}`}>
             <Database size={18} />
             <b>{label.trim() || service?.name || t("fwd.diagram.service")}</b>
             <span>{itself(remoteHost || "localhost") ? t("fwd.diagram.itself") : remoteHost.trim()}</span>
-            <span>:{remote ?? "…"}</span>
+            <span>:{remote ?? "—"}</span>
           </div>
         </div>
         <p className="fwd-explain">
@@ -411,14 +434,22 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
 
         <div className="field">
           <label>{t("fwd.host")}</label>
-          <select ref={first} className="select" value={hostId ?? ""} onChange={(e) => setHostId(e.target.value || null)}>
-            {!hostId && <option value="">{t("fwd.host.pick")}</option>}
-            {props.hosts.map((h) => (
-              <option key={h.id} value={h.id}>
-                {hostTitle(h)}
-              </option>
-            ))}
-          </select>
+          <button type="button" className="fwd-host-button" onClick={() => setPicking(true)}>
+            {host ? (
+              <>
+                <span className="card-icon">
+                  <OsIcon os={host.os} />
+                </span>
+                <span className="fwd-host-text">
+                  <b>{hostTitle(host)}</b>
+                  <span>{hostSubtitle(host, snapshot)}</span>
+                </span>
+              </>
+            ) : (
+              <span className="fwd-host-text dim">{t("fwd.host.pick")}</span>
+            )}
+            <ChevronRight size={15} />
+          </button>
         </div>
 
         <div className="field">
@@ -509,6 +540,83 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
           {t("fwd.save_open")}
         </button>
       </div>
+      </>
+      )}
     </form>
+  );
+}
+
+/** The hosts to go through, to search and pick from, in their groups. */
+function HostPicker(props: { hosts: HostView[]; current: Id | null; onBack: () => void; onPick: (id: Id) => void }) {
+  const t = useT();
+  const snapshot = useVault((s) => s.snapshot);
+  const [query, setQuery] = useState("");
+  const search = useRef<HTMLInputElement>(null);
+  useEffect(() => search.current?.focus(), []);
+  const needle = query.trim().toLowerCase();
+  const found = props.hosts
+    .filter((h) => !needle || [hostTitle(h), h.address, hostSubtitle(h, snapshot), ...h.tags].some((x) => x.toLowerCase().includes(needle)))
+    .sort(compareHosts);
+  // Grouped as on the hosts page: hosts without a group first, then each group by its path.
+  const paths = groupOptions(snapshot.groups);
+  const sections: { title: string | null; hosts: HostView[] }[] = [
+    { title: null, hosts: found.filter((h) => !h.group_id) },
+    ...paths.map((g) => ({ title: g.path, hosts: found.filter((h) => h.group_id === g.id) })),
+  ].filter((section) => section.hosts.length > 0);
+
+  return (
+    <>
+      <div className="fwd-picker-head">
+        <button type="button" className="btn ghost icon small" onClick={props.onBack} aria-label={t("fwd.host.back")}>
+          <ArrowLeft size={15} />
+        </button>
+        <div className="search grow">
+          <Search size={14} />
+          <input
+            ref={search}
+            className="input"
+            value={query}
+            placeholder={t("fwd.host.search")}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && found.length > 0) {
+                e.preventDefault();
+                props.onPick(found[0].id);
+              }
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                props.onBack();
+              }
+            }}
+            spellCheck={false}
+          />
+        </div>
+      </div>
+      <div className="panel-body scroll fwd-picker">
+        {sections.map((section) => (
+          <div key={section.title ?? ""} className="fwd-picker-section">
+            <div className="section-title">{section.title ?? t("fwd.host.ungrouped")}</div>
+            {section.hosts.map((h) => (
+              <button
+                key={h.id}
+                type="button"
+                className={cx("fwd-picker-row", h.id === props.current && "on")}
+                onClick={() => props.onPick(h.id)}
+              >
+                <span className="card-icon">
+                  <OsIcon os={h.os} />
+                </span>
+                <span className="fwd-host-text">
+                  <b>{hostTitle(h)}</b>
+                  <span>{hostSubtitle(h, snapshot)}</span>
+                </span>
+                {h.forwards.length > 0 && <span className="chip">{h.forwards.length}</span>}
+              </button>
+            ))}
+          </div>
+        ))}
+        {sections.length === 0 && <p className="muted">{t("fwd.no_results", { query: query.trim() })}</p>}
+      </div>
+    </>
   );
 }
