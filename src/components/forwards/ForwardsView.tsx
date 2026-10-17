@@ -369,7 +369,7 @@ function ForwardEditor(props: { entry: Entry | null; hosts: HostView[]; entries:
 
   return (
     <form
-      className="panel"
+      className="panel fwd-editor"
       onSubmit={(e) => {
         e.preventDefault();
         void save(false);

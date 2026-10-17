@@ -4385,6 +4385,10 @@ html[data-theme="light"] .welcome-glow i:last-child {
 }
 
 /* Port forwarding section: cards, the editor's drawing and its helper. */
+.panel.fwd-editor {
+  width: 430px;
+}
+
 .fwd-icon.up {
   background: color-mix(in srgb, var(--ok) 16%, transparent);
   color: var(--ok);
@@ -4465,7 +4469,7 @@ html[data-theme="light"] .welcome-glow i:last-child {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   overflow: hidden;
   padding: 20px 10px 16px;
   border: 1px solid var(--line);
@@ -4475,7 +4479,7 @@ html[data-theme="light"] .welcome-glow i:last-child {
 
 .fwd-node {
   display: flex;
-  flex: 0 1 76px;
+  flex: 0 1 84px;
   flex-direction: column;
   align-items: center;
   gap: 4px;
@@ -4490,7 +4494,7 @@ html[data-theme="light"] .welcome-glow i:last-child {
 .fwd-node b {
   max-width: 100%;
   overflow: hidden;
-  font-size: 12px;
+  font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
