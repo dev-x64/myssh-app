@@ -176,7 +176,15 @@ export function createHandler(scenario: Scenario) {
         await later(80);
       }
     },
-    update_restart: () => location.reload(),
+    update_restart: ({ tabs }) => {
+      if (typeof tabs === "string") sessionStorage.setItem("preview.reopen", tabs);
+      location.reload();
+    },
+    update_reopen_take: () => {
+      const tabs = sessionStorage.getItem("preview.reopen");
+      sessionStorage.removeItem("preview.reopen");
+      return tabs;
+    },
 
     host_save: ({ input }) => saveHost(input as HostInput),
     host_delete: ({ id }) => void (vault.hosts = vault.hosts.filter((h) => h.id !== id)),

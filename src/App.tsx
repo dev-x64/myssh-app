@@ -51,7 +51,15 @@ import { MenuEntryOffer } from "./components/MenuEntry";
 import { ChangeEmailDialog, openEmailDialog } from "./components/cloud/ChangeEmail";
 import { WindowControls } from "./components/WindowControls";
 import { VaultError } from "./components/VaultError";
-import { getSession, openHost, openLocal, requestCloseEditor, requestCloseTab, startSessionSync } from "./lib/sessions";
+import {
+  getSession,
+  openHost,
+  openLocal,
+  reopenTabs,
+  requestCloseEditor,
+  requestCloseTab,
+  startSessionSync,
+} from "./lib/sessions";
 import { MAC, WINDOWS } from "./lib/platform";
 import { ACCENT_COLOR, isDark, onSystemThemeChange, useSettings } from "./lib/settings";
 import { isLocalTab, useUi, useVault, type Tab, type View } from "./lib/store";
@@ -188,7 +196,8 @@ function useBootstrap() {
   useEffect(() => {
     // A reloaded window cannot reach sessions it opened before the reload.
     void api.sessionCloseAll().catch(() => {});
-    void useVault.getState().init();
+    // Tabs open before a restart into an update come back once the hosts are known.
+    void useVault.getState().init().then(() => reopenTabs());
     startSessionSync();
     startCloud();
     startPlan();

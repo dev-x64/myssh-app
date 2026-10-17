@@ -215,16 +215,30 @@ pub async fn update_install(app: AppHandle, progress: Channel<Progress>) -> Resu
     Ok(())
 }
 
-/// Starts the app again, as the version just installed. Open sessions end.
+/// Where the tabs open before a restart wait for the app to come back.
+fn reopen_path(state: &AppState) -> std::path::PathBuf {
+    state.data_dir.join("reopen.json")
+}
+
+/// Starts the app again, as the version just installed. Open sessions end;
+/// `tabs`, what the window says was open, is kept on disk for the window
+/// that comes back to open again (the window's own storage may not reach
+/// the disk before the app is gone).
 #[tauri::command]
-pub fn update_restart(app: AppHandle, state: State<'_, AppState>) -> Result<()> {
+pub fn update_restart(app: AppHandle, state: State<'_, AppState>, tabs: Option<String>) -> Result<()> {
+    if let Some(tabs) = tabs {
+        let _ = std::fs::write(reopen_path(&state), tabs);
+    }
     for session in state.drain_sessions() {
         session.close();
     }
     // The installer ends this app, and starts the new version when it is done.
     #[cfg(target_os = "windows")]
     if let Some((update, bytes)) = WAITING.lock().unwrap().take() {
-        update.restart_after_install(true).install(bytes).map_err(failed)?;
+        if let Err(e) = update.restart_after_install(true).install(bytes) {
+            let _ = std::fs::remove_file(reopen_path(&state));
+            return Err(failed(e));
+        }
     }
     #[cfg(target_os = "macos")]
     if relaunch_when_gone() {
@@ -232,6 +246,16 @@ pub fn update_restart(app: AppHandle, state: State<'_, AppState>) -> Result<()> 
         return Ok(());
     }
     app.restart();
+}
+
+/// The tabs kept by the last restart, given once: a launch that fails with
+/// them open must not open them again.
+#[tauri::command]
+pub fn update_reopen_take(state: State<'_, AppState>) -> Option<String> {
+    let path = reopen_path(&state);
+    let tabs = std::fs::read_to_string(&path).ok();
+    let _ = std::fs::remove_file(&path);
+    tabs
 }
 
 /// On a Mac: has the app opened again once this copy has quit, the way the

@@ -782,6 +782,53 @@ export function closeTab(tabId: string) {
   useUi.getState().removeTab(tabId);
 }
 
+// ------------------------------------------------------- after a restart ---
+//
+// Restarting into an update ends every connection. So that it costs little,
+// the open tabs are written down just before, and the app opens them again
+// once it is back: the same hosts, in the same order and groups, with the
+// same one in front. They connect afresh; nothing that ran in them comes
+// back, and no snippet is run again.
+
+/** A record older than this is from a restart that never happened. */
+const REOPEN_FRESH_MS = 10 * 60 * 1000;
+
+interface Reopen {
+  at: number;
+  tabs: { hostId: Id; group: TabGroup | null; active: boolean }[];
+}
+
+/** The open tabs, written down for the app as it starts again. */
+export function tabsToReopen(): string {
+  const ui = useUi.getState();
+  const record: Reopen = {
+    at: Date.now(),
+    tabs: ui.tabs
+      .filter((tab) => tab.status !== "closed" || tab.reconnect)
+      .map((tab) => ({ hostId: tab.hostId, group: tab.group ?? null, active: tab.id === ui.active })),
+  };
+  return JSON.stringify(record);
+}
+
+/** Opens again the tabs written down before a restart, if it was just now. */
+export async function reopenTabs() {
+  let record: Reopen | null = null;
+  try {
+    record = JSON.parse((await api.updateReopenTake()) ?? "null") as Reopen | null;
+  } catch {
+    return;
+  }
+  if (!record || !Array.isArray(record.tabs) || !(Date.now() - record.at < REOPEN_FRESH_MS)) return;
+  let front: string | undefined;
+  for (const { hostId, group, active } of record.tabs) {
+    const id = hostId === LOCAL_HOST_ID ? openTab(hostId, t("local.title")) : openHost(hostId, null, group);
+    if (active) front = id;
+  }
+  const ui = useUi.getState();
+  if (front) ui.activate(front);
+  else if (record.tabs.length) ui.goHome();
+}
+
 function applyToAll() {
   const settings = useSettings.getState();
   for (const session of sessions.values()) session.applySettings(settings);

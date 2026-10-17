@@ -543,7 +543,10 @@ export const api = {
     progress.onmessage = onProgress;
     return invoke<void>("update_install", { progress });
   },
-  updateRestart: () => invoke<void>("update_restart"),
+  /** Restarts into the installed version; `tabs` is kept for the window that comes back. */
+  updateRestart: (tabs: string | null) => invoke<void>("update_restart", { tabs }),
+  /** What `updateRestart` kept, given once. */
+  updateReopenTake: () => invoke<string | null>("update_reopen_take"),
   snapshot: () => invoke<Snapshot>("vault_snapshot"),
 
   hostSave: (input: HostInput) => invoke<HostView>("host_save", { input }),

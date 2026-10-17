@@ -63,6 +63,7 @@ pub fn run() {
             update::update_check,
             update::update_install,
             update::update_restart,
+            update::update_reopen_take,
             commands::vault_retry,
             commands::vault_replace,
             commands::disk_encryption,

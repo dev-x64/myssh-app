@@ -8,6 +8,8 @@
 // Installing puts the new version in place of this one on disk; the app
 // that is running goes on as it was until it is started again. So an
 // update can be taken now, with a restart, or left for the next launch.
+// A restart ends the connections, and the tabs open again once the app is
+// back.
 //
 // What is found is usually newer. In an emergency it is older: the version
 // in use was withdrawn, and the way back is offered. That is not left for
@@ -15,6 +17,7 @@
 
 import { create } from "zustand";
 import { api, asApiError, type ApiError, type UpdateInfo } from "./api";
+import { tabsToReopen } from "./sessions";
 
 /** The first look, shortly after start, and how often after that. */
 const FIRST_CHECK_MS = 1_000;
@@ -144,7 +147,7 @@ export const useUpdate = create<UpdateStore>((set, get) => ({
     if (get().phase !== "ready") return;
     set({ phase: "restarting", error: null });
     try {
-      await api.updateRestart();
+      await api.updateRestart(tabsToReopen());
     } catch (e) {
       set({ phase: "ready", error: asApiError(e) });
     }
