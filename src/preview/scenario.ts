@@ -15,7 +15,8 @@ export interface Scenario {
   vaultError: boolean;
   /** The cloud server cannot be reached. */
   offline: boolean;
-  os: "mac" | "windows" | "linux";
+  /** android: the phone's layout (look at it at a phone's width: ui-shot.mjs --mobile). */
+  os: "mac" | "windows" | "linux" | "android";
   /** The preview's own panel is shown. */
   panel: boolean;
   /** AI suggestions: answering, used up, or switched off on the server. */
@@ -49,7 +50,7 @@ export const CHOICES: { [K in keyof Scenario]: Scenario[K][] } = {
   update: ["none", "available"],
   vaultError: [false, true],
   offline: [false, true],
-  os: ["mac", "windows", "linux"],
+  os: ["mac", "windows", "linux", "android"],
   panel: [true, false],
   ai: ["on", "limited", "off"],
   forwards: ["ok", "busy", "refused"],

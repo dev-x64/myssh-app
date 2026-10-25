@@ -17,7 +17,7 @@ import { reportError } from "../../lib/actions";
 import { api } from "../../lib/api";
 import { usePlan } from "../../lib/plan";
 import { useUi, useVault } from "../../lib/store";
-import { WINDOWS } from "../../lib/platform";
+import { ANDROID, WINDOWS } from "../../lib/platform";
 import { useUpdate } from "../../lib/update";
 import { resolveTermTheme } from "../../lib/themes";
 import { cx, Segmented, Switch } from "../ui";
@@ -328,7 +328,7 @@ export function SettingsView() {
                 update.available
                   ? t("update.available", { version: update.available.version })
                   : status && !status.updates
-                    ? t(WINDOWS ? "update.by_store" : "update.not_here")
+                    ? t(WINDOWS || ANDROID ? "update.by_store" : "update.not_here")
                     : update.checkedAt
                       ? t("update.none")
                       : undefined

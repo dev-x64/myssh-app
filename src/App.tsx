@@ -35,7 +35,7 @@ import { SnippetsView } from "./components/snippets/SnippetsView";
 import { ForwardsView } from "./components/forwards/ForwardsView";
 import { RunGroupList } from "./components/terminal/RunGroup";
 import { TerminalPane } from "./components/terminal/TerminalPane";
-import { ContextMenu, cx, Field, Modal, Toasts, type MenuEntry } from "./components/ui";
+import { ContextMenu, cx, Toasts, type MenuEntry } from "./components/ui";
 import { api } from "./lib/api";
 import { startCloud } from "./lib/cloud";
 import { startPlan } from "./lib/plan";
@@ -50,6 +50,7 @@ import { UpdateButton, UpdateNotice } from "./components/UpdateNotice";
 import { MenuEntryOffer } from "./components/MenuEntry";
 import { ChangeEmailDialog, openEmailDialog } from "./components/cloud/ChangeEmail";
 import { WindowControls } from "./components/WindowControls";
+import { RenameTab } from "./components/RenameTab";
 import { VaultError } from "./components/VaultError";
 import {
   getSession,
@@ -60,7 +61,8 @@ import {
   requestCloseTab,
   startSessionSync,
 } from "./lib/sessions";
-import { MAC, WINDOWS } from "./lib/platform";
+import { MAC, MOBILE, WINDOWS } from "./lib/platform";
+import { MobileApp } from "./components/mobile/MobileApp";
 import { ACCENT_COLOR, isDark, onSystemThemeChange, useSettings } from "./lib/settings";
 import { isLocalTab, useUi, useVault, type Tab, type View } from "./lib/store";
 
@@ -216,7 +218,7 @@ function useBootstrap() {
       listen("link-arrived", takeLinks),
     ];
     // Without the Mac's menu bar, the window takes the shortcuts itself.
-    if (!MAC) window.addEventListener("keydown", onShortcut, true);
+    if (!MAC && !MOBILE) window.addEventListener("keydown", onShortcut, true);
     const offTheme = onSystemThemeChange(() => rerender((n) => n + 1));
     return () => {
       offTheme();
@@ -247,40 +249,6 @@ function useFullscreen(): boolean {
     return () => void pending.then((off) => off());
   }, []);
   return fullscreen;
-}
-
-/** A tab's name, changed: for telling apart two terminals on one host. */
-function RenameTab(props: { tab: Tab; onDone: (title: string | null) => void }) {
-  const t = useT();
-  const [title, setTitle] = useState(props.tab.title);
-  return (
-    <Modal
-      title={t("tab.rename.title")}
-      onClose={() => props.onDone(null)}
-      onSubmit={() => props.onDone(title.trim() || null)}
-      footer={
-        <>
-          <button type="button" className="btn" onClick={() => props.onDone(null)}>
-            {t("common.cancel")}
-          </button>
-          <button type="submit" className="btn primary" disabled={!title.trim()}>
-            {t("common.rename")}
-          </button>
-        </>
-      }
-    >
-      <Field label={t("tab.rename.label")}>
-        <input
-          className="input"
-          data-autofocus
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onFocus={(e) => e.target.select()}
-          spellCheck={false}
-        />
-      </Field>
-    </Modal>
-  );
 }
 
 function TitleBar() {
@@ -593,6 +561,10 @@ function Home() {
 
 export default function App() {
   useBootstrap();
+  return MOBILE ? <MobileApp /> : <DesktopApp />;
+}
+
+function DesktopApp() {
   const loaded = useVault((s) => s.loaded);
   const failed = useVault((s) => s.loadError !== null);
   const tabs = useUi((s) => s.tabs);

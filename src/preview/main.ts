@@ -14,6 +14,7 @@ const scenario = loadScenario();
 const AGENTS = {
   windows: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MySSH-preview",
   linux: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) MySSH-preview",
+  android: "Mozilla/5.0 (Linux; Android 15; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Mobile MySSH-preview",
 };
 if (scenario.os !== "mac") {
   Object.defineProperty(navigator, "userAgent", { value: AGENTS[scenario.os] });

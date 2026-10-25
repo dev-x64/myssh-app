@@ -66,7 +66,8 @@ fn install_id(data_dir: &Path) -> Option<String> {
 /// development build has nothing to replace, so it asks only when pointed
 /// somewhere by hand.
 fn endpoint(install: Option<&str>, signed_in: bool) -> Option<Url> {
-    if PUBKEY.is_empty() {
+    // On a phone the app store brings the updates.
+    if PUBKEY.is_empty() || cfg!(mobile) {
         return None;
     }
     if cfg!(debug_assertions) {

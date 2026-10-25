@@ -39,7 +39,7 @@ import {
 import { api, asApiError, type ApiError, type FileEntry, type TransferProgress, type TransferSummary } from "../../lib/api";
 import { appName, openExternally, stopWatching, useExternal } from "../../lib/external";
 import { errorText, formatDateTime, formatSize, useT } from "../../lib/i18n";
-import { LINUX, MAC, WINDOWS } from "../../lib/platform";
+import { LINUX, MAC, MOBILE, WINDOWS } from "../../lib/platform";
 import { getSession } from "../../lib/sessions";
 import {
   FILE_COLUMN_WIDTH,
@@ -51,7 +51,7 @@ import {
 import { useUi, type Tab } from "../../lib/store";
 import { Tip } from "../Tip";
 import { FilesDemo } from "./HelpDemos";
-import { Confirm, ContextMenu, cx, Field, Modal, type MenuEntry } from "../ui";
+import { Confirm, ContextMenu, cx, Field, Modal, Segmented, type MenuEntry } from "../ui";
 
 /** Matches the editor limit enforced by the core. */
 const EDIT_LIMIT = 2 * 1024 * 1024;
@@ -854,7 +854,9 @@ function PaneView(props: {
                 onClick={(e) => {
                   e.stopPropagation();
                   props.onActivate();
-                  setState((s) => ({ ...s, cursor: PARENT, anchor: null, selected: new Set() }));
+                  // A tap on a phone goes up, as a double click does here.
+                  if (MOBILE) goUp();
+                  else setState((s) => ({ ...s, cursor: PARENT, anchor: null, selected: new Set() }));
                 }}
                 onDoubleClick={goUp}
                 onContextMenu={(e) => {
@@ -881,7 +883,7 @@ function PaneView(props: {
                 state.selected.has(entry.path) && "selected",
                 state.cursor === entry.path && "cursor",
               )}
-              draggable
+              draggable={!MOBILE}
               onDragStart={(e) => {
                 // Dragging a row outside the selection drags just that row.
                 if (!state.selected.has(entry.path)) {
@@ -890,7 +892,8 @@ function PaneView(props: {
                 e.dataTransfer.setData(DRAG_TYPE, props.side);
                 e.dataTransfer.effectAllowed = "copy";
               }}
-              onClick={(e) => click(e, entry)}
+              // On a phone a tap opens: a folder, or a file in the editor.
+              onClick={(e) => (MOBILE ? props.onOpen(entry) : click(e, entry))}
               onDoubleClick={() => props.onOpen(entry)}
               onContextMenu={(e) => {
                 e.stopPropagation();
@@ -1167,7 +1170,7 @@ export function FileManager({ tab }: { tab: Tab }) {
     if (entry.is_dir) void panes[side].show(entry.path);
     else if (entry.kind === "other") return;
     else if (side === "remote") edit(entry);
-    else void openIn("local", entry, null);
+    else if (!MOBILE) void openIn("local", entry, null);
   };
 
   const attempt = async (side: Side, action: () => Promise<unknown>): Promise<ApiError | null> => {
@@ -1218,13 +1221,14 @@ export function FileManager({ tab }: { tab: Tab }) {
     if (entry) {
       if (entry.is_dir && targets.length === 1) {
         items.push({ label: t("files.open"), icon: <Folder size={14} />, onSelect: () => open(side, entry) });
-      } else if (targets.length === 1 && entry.kind !== "other") {
+      } else if (targets.length === 1 && entry.kind !== "other" && !(MOBILE && side === "local")) {
+        // A phone has no other apps to hand a file to from here.
         items.push(
           side === "remote"
             ? { label: t("files.edit"), icon: <SquarePen size={14} />, onSelect: () => edit(entry) }
             : { label: t("files.open"), icon: <FileIcon size={14} />, onSelect: () => open(side, entry) },
         );
-        if (usable) {
+        if (usable && !MOBILE) {
           items.push({
             label: t("files.open_with"),
             icon: <AppWindow size={14} />,
@@ -1391,10 +1395,23 @@ export function FileManager({ tab }: { tab: Tab }) {
   const deleting = dialog?.kind === "delete" ? dialog : null;
 
   return (
-    <div className="fm" ref={root} tabIndex={-1} onKeyDown={onKeyDown}>
-      <Tip id="files" title={t("tip.files.title")} className="tip-bar" art={<FilesDemo />}>
+    <div className={cx("fm", MOBILE && `mobile on-${active}`)} ref={root} tabIndex={-1} onKeyDown={onKeyDown}>
+      <Tip id="files" title={t("tip.files.title")} className="tip-bar" art={MOBILE ? undefined : <FilesDemo />}>
         {t("tip.files.text")}
       </Tip>
+      {/* One side at a time on a phone: the server's, or the phone's own. */}
+      {MOBILE && (
+        <div className="fm-sides">
+          <Segmented
+            value={active}
+            options={[
+              { value: "remote", label: t("mobile.files.server") },
+              { value: "local", label: t("mobile.files.phone") },
+            ]}
+            onChange={setActive}
+          />
+        </div>
+      )}
       <div className="fm-panes">
         <PaneView
           side="local"

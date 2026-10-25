@@ -172,7 +172,7 @@ pub async fn stamp(path: &Path) -> Result<Option<Stamp>> {
 /// Moves items to the system trash, so a local deletion can be undone.
 pub async fn trash(paths: Vec<String>) -> Result<()> {
     tokio::task::spawn_blocking(move || {
-        ::trash::delete_all(paths.iter().map(Path::new)).map_err(|e| Error::Sftp(e.to_string()))
+        delete_all(paths.iter().map(Path::new)).map_err(|e| Error::Sftp(e.to_string()))
     })
     .await
     .map_err(|e| Error::Sftp(e.to_string()))?
@@ -183,7 +183,23 @@ pub fn trash_now(paths: &[std::path::PathBuf]) -> Result<()> {
     if paths.is_empty() {
         return Ok(());
     }
-    ::trash::delete_all(paths).map_err(|e| Error::Io(std::io::Error::other(e.to_string())))
+    delete_all(paths.iter().map(PathBuf::as_path)).map_err(|e| Error::Io(std::io::Error::other(e)))
+}
+
+#[cfg(not(target_os = "android"))]
+fn delete_all<'a>(paths: impl IntoIterator<Item = &'a Path>) -> std::result::Result<(), String> {
+    ::trash::delete_all(paths).map_err(|e| e.to_string())
+}
+
+/// Android has no trash: what is deleted there is gone.
+#[cfg(target_os = "android")]
+fn delete_all<'a>(paths: impl IntoIterator<Item = &'a Path>) -> std::result::Result<(), String> {
+    for path in paths {
+        let meta = std::fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+        let removed = if meta.is_dir() { std::fs::remove_dir_all(path) } else { std::fs::remove_file(path) };
+        removed.map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

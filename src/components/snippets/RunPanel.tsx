@@ -1,5 +1,6 @@
 import { Check, Folder, Minus, Play, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useBack } from "../../lib/back";
 import { reportError } from "../../lib/actions";
 import { api, type Group, type HostView, type Id, type Snippet } from "../../lib/api";
 import { useT } from "../../lib/i18n";
@@ -39,6 +40,7 @@ function Tick({ state }: { state: "all" | "some" | "none" }) {
  */
 export function RunPanel({ snippet, onClose }: { snippet: Snippet; onClose: () => void }) {
   const t = useT();
+  useBack(onClose);
   const snapshot = useVault((s) => s.snapshot);
   const hosts = useMemo(() => [...snapshot.hosts].sort(compareHosts), [snapshot.hosts]);
   const groups = useMemo(

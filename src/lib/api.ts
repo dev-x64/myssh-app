@@ -590,6 +590,7 @@ export const api = {
   importScan: () => invoke<ImportSource[]>("import_scan"),
   /** The hosts in a file chosen by hand: an export, an ini file, an ssh config. */
   importFile: (path: string) => invoke<ImportSource>("import_file", { path }),
+  importText: (text: string, name: string) => invoke<ImportSource>("import_text", { text, name }),
   importApply: (hosts: FoundHost[]) => invoke<ImportReport>("import_apply", { hosts }),
   /** The tailnet's machines and who is online; empty without Tailscale. */
   tailscalePeers: () => invoke<TailscalePeer[]>("tailscale_peers"),

@@ -28,6 +28,10 @@ uuid = { version = "1", features = ["v4"] }
 portable-pty = "0.9"
 tauri-plugin-deep-link = "2"
 
+# Web addresses open in the phone's browser through the system.
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-opener = "2"
+
 # Where PuTTY, WinSCP and MobaXterm keep their sessions, for the import.
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

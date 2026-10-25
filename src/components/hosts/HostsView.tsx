@@ -19,6 +19,7 @@ import { api, type Group, type HostView, type Id } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { watchHosts } from "../../lib/hostStats";
 import { openHost } from "../../lib/sessions";
+import { MOBILE } from "../../lib/platform";
 import { useSettings } from "../../lib/settings";
 import { compareHosts, hostSubtitle, hostTitle, useUi, useVault } from "../../lib/store";
 import { Confirm, ContextMenu, cx, Empty, type MenuEntry } from "../ui";
@@ -68,7 +69,7 @@ export function HostsView() {
   const [tag, setTag] = useState<string | null>(null);
   const [selected, setSelected] = useState<Id | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; entries: MenuEntry[] } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; title?: string; entries: MenuEntry[] } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // The current group may have been deleted.
@@ -184,6 +185,7 @@ export function HostsView() {
     setMenu({
       x: e.clientX,
       y: e.clientY,
+      title: hostTitle(host),
       entries: [
         { label: t("common.connect"), icon: <Play size={14} />, onSelect: () => openHost(host.id) },
         {
@@ -213,6 +215,7 @@ export function HostsView() {
     setMenu({
       x: e.clientX,
       y: e.clientY,
+      title: target.name,
       entries: [
         {
           label: t("common.rename"),
@@ -320,12 +323,13 @@ export function HostsView() {
                   <button
                     key={g.id}
                     className={cx("card", dropTarget === g.id && "dropping", selected === g.id && "selected")}
-                    draggable
+                    draggable={!MOBILE}
                     onDragStart={(e) => startDrag(e, GROUP_DRAG, g.id)}
-                    // As a folder: one click picks it, two (or Enter) go in.
+                    // As a folder: one click picks it, two (or Enter) go in. A tap goes in.
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelected(g.id);
+                      if (MOBILE) setGroupId(g.id);
+                      else setSelected(g.id);
                     }}
                     onDoubleClick={() => {
                       setSelected(null);
@@ -378,9 +382,11 @@ export function HostsView() {
                     )}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelected(host.id);
+                      // On a phone a tap connects, as a double click does here.
+                      if (MOBILE) openHost(host.id);
+                      else setSelected(host.id);
                     }}
-                    draggable
+                    draggable={!MOBILE}
                     onDragStart={(e) => startDrag(e, HOST_DRAG, host.id)}
                     onDoubleClick={() => openHost(host.id)}
                     onKeyDown={(e) => {

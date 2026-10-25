@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useCloud } from "../../lib/cloud";
+import { SELLS_PRO } from "../../lib/platform";
 import type { AiAllowance } from "../../lib/api";
 import { formatClock, formatDate, useT, type MessageKey } from "../../lib/i18n";
 import { loadPlan, usePlan } from "../../lib/plan";
@@ -165,7 +166,7 @@ export function AccountMenu() {
               <MonitorSmartphone size={14} />
               {t("account.devices")}
             </button>
-            {!account.revoked && !free && (
+            {!account.revoked && !free && SELLS_PRO && (
               <button
                 role="menuitem"
                 title={t("cloud.plan.open.hint")}

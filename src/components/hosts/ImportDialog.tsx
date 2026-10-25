@@ -1,4 +1,6 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { pickLocalFile } from "../../lib/pickFile";
+import { MOBILE } from "../../lib/platform";
 import { ChevronRight, Download, FileUp, Folder, KeyRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { reportError } from "../../lib/actions";
@@ -36,6 +38,15 @@ export function ImportDialog({ onClose, initial }: { onClose: () => void; initia
   };
 
   const pick = async () => {
+    // A phone's picker hands over a file to read, not a path.
+    if (MOBILE) {
+      const file = await pickLocalFile();
+      if (!file) return;
+      setBusy(true);
+      await api.importText(await file.text(), file.name).then(open, reportError);
+      setBusy(false);
+      return;
+    }
     const path = await pickFile({ multiple: false, directory: false });
     if (typeof path !== "string") return;
     setBusy(true);

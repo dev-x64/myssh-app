@@ -9,8 +9,12 @@ import {
   type InputHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
+  type TouchEvent as ReactTouchEvent,
 } from "react";
+import { createPortal } from "react-dom";
+import { useBack } from "../lib/back";
 import { useT } from "../lib/i18n";
+import { MOBILE } from "../lib/platform";
 import { useUi } from "../lib/store";
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
@@ -188,16 +192,19 @@ export function Modal(props: {
   children: ReactNode;
 }) {
   const ref = useRef<HTMLFormElement>(null);
+  useBack(props.onClose);
 
-  // Focus the first field, or the dialog itself so Escape works.
+  // Focus the first field, or the dialog itself so Escape works. On a
+  // phone a field focused by itself brings up the keyboard over the
+  // dialog before it has been read, so there only the dialog is.
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
-    const target = root.querySelector<HTMLElement>("[data-autofocus]") ?? root;
-    target.focus();
+    const target = (!MOBILE && root.querySelector<HTMLElement>("[data-autofocus]")) || root;
+    target.focus({ preventScroll: true });
   }, []);
 
-  return (
+  const dialog = (
     <div
       className={cx("overlay", props.scope !== "tab" && "global")}
       onMouseDown={(e) => {
@@ -233,6 +240,8 @@ export function Modal(props: {
       </form>
     </div>
   );
+  // On a phone the bars hold their own layers; a dialog from one goes over everything.
+  return MOBILE && props.scope !== "tab" ? createPortal(dialog, document.body) : dialog;
 }
 
 export function Confirm(props: {
@@ -277,13 +286,93 @@ export interface MenuEntry {
   onSelect: () => void;
 }
 
-/** A context menu at a screen position, kept inside the window. */
-export function ContextMenu(props: {
+interface MenuProps {
   x: number;
   y: number;
   entries: MenuEntry[];
+  /** What the menu is about, said above it where it is a sheet. */
+  title?: string;
   onClose: () => void;
-}) {
+}
+
+/**
+ * A context menu at a screen position, kept inside the window. On a phone,
+ * where it opens with a long press, it is a sheet at the bottom instead,
+ * its rows a finger's height.
+ */
+export function ContextMenu(props: MenuProps) {
+  return MOBILE ? <MenuSheet {...props} /> : <PopupMenu {...props} />;
+}
+
+function MenuSheet(props: MenuProps) {
+  return (
+    <Sheet title={props.title} onClose={props.onClose}>
+      <div className="sheet-menu" role="menu">
+        {props.entries.map((entry) => (
+          <div key={entry.label}>
+            {entry.separatorBefore && <hr />}
+            <button
+              type="button"
+              role="menuitem"
+              className={cx(entry.danger && "danger")}
+              onClick={() => {
+                props.onClose();
+                entry.onSelect();
+              }}
+            >
+              {entry.icon}
+              {entry.label}
+            </button>
+          </div>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
+/**
+ * A panel that comes up from the bottom of a phone's screen, over a dimmed
+ * window: a tap beside it, a swipe down or Back puts it away.
+ */
+export function Sheet(props: { title?: string; className?: string; onClose: () => void; children: ReactNode }) {
+  useBack(props.onClose);
+  const panel = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ y: number; dy: number } | null>(null);
+  // Swiped down by its grip or title, it follows the finger and goes past a little way.
+  const onTouchStart = (e: ReactTouchEvent) => {
+    drag.current = { y: e.touches[0].clientY, dy: 0 };
+  };
+  const onTouchMove = (e: ReactTouchEvent) => {
+    if (!drag.current || !panel.current) return;
+    drag.current.dy = Math.max(0, e.touches[0].clientY - drag.current.y);
+    panel.current.style.transform = `translateY(${drag.current.dy}px)`;
+  };
+  const onTouchEnd = () => {
+    const moved = drag.current?.dy ?? 0;
+    drag.current = null;
+    if (moved > 80) props.onClose();
+    else if (panel.current) panel.current.style.transform = "";
+  };
+  return createPortal(
+    <div
+      className="sheet-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) props.onClose();
+      }}
+    >
+      <div ref={panel} className={cx("sheet", props.className)} role="dialog" aria-label={props.title}>
+        <div className="sheet-grab" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+          <span className="sheet-grip" />
+          {props.title && <div className="sheet-title">{props.title}</div>}
+        </div>
+        <div className="sheet-body scroll">{props.children}</div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function PopupMenu(props: MenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: props.x, top: props.y });
 

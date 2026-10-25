@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, Cable, ChevronRight, Database, Laptop, Lock, Pencil, Play, Plus, Search, Server, Square, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mutate } from "../../lib/actions";
+import { useBack } from "../../lib/back";
 import { api, type HostView, type Id, type PortForward, type PortForwardInput } from "../../lib/api";
 import { closeForward, openForward, refreshForwards, useForwards, type OpenForward } from "../../lib/forwards";
 import { errorText, useT, type T } from "../../lib/i18n";
@@ -314,6 +315,7 @@ function ForwardEditor(props: {
   onClose: () => void;
 }) {
   const t = useT();
+  useBack(props.onClose, !props.hidden);
   const f = props.entry?.forward;
   // A new forward names no host until one is picked, unless there is only one.
   const [hostId, setHostId] = useState<Id | null>(

@@ -9,6 +9,7 @@
 //   node scripts/ui-shot.mjs out.png --eval "__myssh.openHost('h-web1')" --wait 2500
 //   node scripts/ui-shot.mjs out.png --eval steps.js --size 1440x900 --scale 2
 //   node scripts/ui-shot.mjs out.png --eval artwork.js --size 1024x1024 --transparent
+//   node scripts/ui-shot.mjs out.png --mobile     (the phone's layout, 390x844 at 3x, touch)
 //
 // --eval takes JavaScript or a file of it; it runs in the window as the body
 // of an async function, with `__myssh` (the app's stores and actions),
@@ -23,7 +24,7 @@ import { join } from "node:path";
 const CHROME = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 function options(argv) {
-  const out = { file: null, query: "", evaluate: null, wait: 1500, size: "1280x800", scale: 1, port: 1430, transparent: false };
+  const out = { file: null, query: "", evaluate: null, wait: 1500, size: null, scale: null, port: 1430, transparent: false, mobile: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const next = () => argv[++i];
@@ -34,10 +35,13 @@ function options(argv) {
     else if (arg === "--scale") out.scale = Number(next());
     else if (arg === "--port") out.port = Number(next());
     else if (arg === "--transparent") out.transparent = true;
+    else if (arg === "--mobile") out.mobile = true;
     else if (!out.file) out.file = arg;
     else throw new Error(`what is ${arg}?`);
   }
   if (!out.file) throw new Error("say where to put the picture: node scripts/ui-shot.mjs out.png");
+  out.size ??= out.mobile ? "390x844" : "1280x800";
+  out.scale ??= out.mobile ? 3 : 1;
   return out;
 }
 
@@ -108,10 +112,12 @@ try {
 
   await send("Runtime.enable");
   await send("Page.enable");
-  await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: opts.scale, mobile: false });
+  await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: opts.scale, mobile: opts.mobile });
+  if (opts.mobile) await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
   // Each picture starts from the same place: the panel hidden, settings as new.
   const query = new URLSearchParams(opts.query);
   if (!query.has("panel")) query.set("panel", "false");
+  if (opts.mobile && !query.has("os")) query.set("os", "android");
   await send("Page.navigate", { url: `${base}?${query}` });
   await waitFor("the app", async () => {
     const { result } = await send("Runtime.evaluate", { expression: "Boolean(window.__myssh && document.querySelector('#root > *'))" });

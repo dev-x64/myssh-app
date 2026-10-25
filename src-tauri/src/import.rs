@@ -409,6 +409,15 @@ pub async fn import_scan(state: State<'_, AppState>) -> Result<Vec<ImportSource>
 #[tauri::command]
 pub fn import_file(state: State<'_, AppState>, path: String) -> Result<ImportSource> {
     let text = std::fs::read_to_string(&path).map_err(|e| Error::Invalid(format!("cannot read the file: {e}")))?;
+    import_text(state, text, path)
+}
+
+/// The same for a file's text the window has read itself: on a phone a
+/// picked file is not a path the app can open, only something to read.
+/// `name` is what the file is called, to say where the hosts came from.
+#[tauri::command]
+pub fn import_text(state: State<'_, AppState>, text: String, name: String) -> Result<ImportSource> {
+    let path = name;
     let kind = import::guess_kind(&text);
     let hosts = match kind {
         SourceKind::OpenSsh => import::parse_ssh_config(&text, &read_include),

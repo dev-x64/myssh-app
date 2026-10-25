@@ -5,10 +5,13 @@ import "./styles/app.css";
 
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { LINUX, WINDOWS } from "./lib/platform";
+import { ANDROID, LINUX, MOBILE, WINDOWS } from "./lib/platform";
+import "./styles/mobile.css";
 
 // The stylesheet lays the window out for the Mac and makes allowances from this.
-document.documentElement.dataset.platform = WINDOWS ? "windows" : LINUX ? "linux" : "mac";
+document.documentElement.dataset.platform = WINDOWS ? "windows" : LINUX ? "linux" : ANDROID ? "android" : "mac";
+// And for a phone, anew: see mobile.css.
+if (MOBILE) document.documentElement.dataset.mobile = "";
 
 // Handles for the development-only test bridge; absent from release builds.
 if (import.meta.env.DEV) {

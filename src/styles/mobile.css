@@ -1,0 +1,1310 @@
+/* The window on a phone (html[data-mobile], see MobileApp.tsx): the same
+   design, for a finger. Things are larger and one screen is shown at a
+   time; the sections are tabs along the bottom. Nothing here applies on a
+   computer. The system bars' insets come from the Android activity as
+   --inset-*, and from the browser's safe area where it has one. */
+
+html[data-mobile] {
+  --m-top: var(--inset-top, env(safe-area-inset-top, 0px));
+  --m-bottom: var(--inset-bottom, env(safe-area-inset-bottom, 0px));
+  --m-left: var(--inset-left, env(safe-area-inset-left, 0px));
+  --m-right: var(--inset-right, env(safe-area-inset-right, 0px));
+  --m-bar: 56px;
+  --m-nav: 62px;
+  --m-tap: 44px;
+  --radius: 11px;
+  --radius-l: 15px;
+}
+
+html[data-mobile] body {
+  font-size: 15px;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* No pointer to hover with: what lights up under it would stay lit after a tap. */
+@media (hover: none) {
+  html[data-mobile] .card:hover {
+    border-color: var(--line);
+    background: var(--bg-2);
+  }
+
+  html[data-mobile] .btn:hover:not(:disabled) {
+    background: var(--bg-2);
+  }
+
+  html[data-mobile] .btn.primary:hover:not(:disabled) {
+    background: var(--accent);
+  }
+}
+
+/* -------------------------------------------------------------- shell --- */
+
+.app.mobile {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--m-left);
+  padding-right: var(--m-right);
+  background: var(--bg-0);
+}
+
+/* The first launch draws its own screen; it keeps clear of the bars. */
+.app.mobile.first-run {
+  padding-top: var(--m-top);
+  padding-bottom: var(--m-bottom);
+}
+
+.app.mobile.first-run,
+.app.mobile.first-run > .body {
+  background: var(--bg-0);
+}
+
+.app.mobile > .body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--bg-1);
+}
+
+.app.mobile .content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.m-bar {
+  flex: none;
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: calc(var(--m-bar) + var(--m-top));
+  padding: var(--m-top) 8px 0 16px;
+  background: var(--bg-0);
+  border-bottom: 1px solid var(--line);
+}
+
+.m-bar-heading {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 21px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+
+.m-bar-heading.with-back {
+  font-size: 18px;
+  margin-left: 2px;
+}
+
+.m-bar:has(.m-bar-icon:first-child) {
+  padding-left: 4px;
+}
+
+.m-bar-icon,
+.m-bar .share > .btn {
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--m-tap);
+  height: var(--m-tap);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-2);
+}
+
+.m-bar-icon:active,
+.m-bar .share > .btn:active {
+  background: var(--bg-3);
+}
+
+.m-bar-icon.on,
+.m-bar .share > .btn.on {
+  background: transparent;
+  color: var(--accent);
+}
+
+.m-bar .share > .btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+.m-bar .share-count {
+  top: 6px;
+  right: 4px;
+}
+
+.m-bar-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  height: var(--m-tap);
+  padding: 0 6px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.m-bar-title:active {
+  background: var(--bg-3);
+}
+
+.m-bar-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 15.5px;
+  font-weight: 640;
+}
+
+.m-bar-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-bar-chevron {
+  flex: none;
+  color: var(--text-3);
+}
+
+.m-bar-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 14px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+/* The account's control, at the end of the bar: the avatar alone. */
+.m-bar .account-pill {
+  height: 34px;
+  border-radius: 17px;
+}
+
+.m-bar .account-pill .pill-label {
+  display: none;
+}
+
+.m-bar .account-menu {
+  position: fixed;
+  top: calc(var(--m-top) + var(--m-bar) - 4px);
+  right: calc(8px + var(--m-right));
+  width: min(320px, calc(100vw - 16px));
+}
+
+/* The tabs along the bottom. */
+.m-nav {
+  flex: none;
+  display: flex;
+  height: calc(var(--m-nav) + var(--m-bottom));
+  padding-bottom: var(--m-bottom);
+  background: var(--bg-0);
+  border-top: 1px solid var(--line);
+}
+
+.m-nav-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+}
+
+.m-nav-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 30px;
+  border-radius: 15px;
+  transition: background 0.18s ease;
+}
+
+.m-nav-item.active {
+  color: var(--accent);
+}
+
+.m-nav-item.active .m-nav-icon {
+  background: var(--accent-soft);
+}
+
+.m-nav-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.m-nav-badge {
+  position: absolute;
+  top: -1px;
+  right: 6px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 750;
+  line-height: 17px;
+  text-align: center;
+}
+
+/* -------------------------------------------------------------- pages --- */
+
+html[data-mobile] .page {
+  container-type: normal;
+}
+
+html[data-mobile] .page-head {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px 8px;
+}
+
+/* The bar above says what the page is. */
+html[data-mobile] .page-head h1,
+html[data-mobile] .page-head .grow {
+  display: none;
+}
+
+html[data-mobile] .page-head:not(:has(> :not(h1, .grow))) {
+  display: none;
+}
+
+html[data-mobile] .page-head .search {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+}
+
+html[data-mobile] .page-head > .btn:not(.primary) {
+  flex: 1 1 auto;
+}
+
+/* Beside a search, a page's other buttons are their icons. */
+html[data-mobile] .page-head:has(.search) > .btn:not(.primary) {
+  flex: none;
+  width: var(--m-tap);
+  padding: 0;
+  gap: 0;
+  font-size: 0;
+}
+
+html[data-mobile] .page-head:has(.search) > .btn:not(.primary) .btn-label {
+  display: none;
+}
+
+html[data-mobile] .page-head .btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* A page's main action floats above the tabs, under the thumb. */
+html[data-mobile] .page-head > .btn.primary {
+  position: fixed;
+  right: calc(16px + var(--m-right));
+  bottom: calc(var(--m-nav) + var(--m-bottom) + 16px);
+  z-index: 30;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  gap: 0;
+  border-radius: 19px;
+  font-size: 0;
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+html[data-mobile] .page-head > .btn.primary svg {
+  width: 26px;
+  height: 26px;
+}
+
+html[data-mobile] .page-body {
+  padding: 4px 16px 100px;
+  -webkit-overflow-scrolling: touch;
+}
+
+html[data-mobile] .section-title {
+  margin: 20px 0 10px;
+  font-size: 12px;
+}
+
+html[data-mobile] .grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+html[data-mobile] .card {
+  min-height: 66px;
+  gap: 13px;
+  padding: 12px 14px;
+}
+
+html[data-mobile] .card:active {
+  background: var(--bg-3);
+}
+
+html[data-mobile] .card-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+
+html[data-mobile] .card-title {
+  font-size: 15.5px;
+}
+
+html[data-mobile] .card-sub {
+  font-size: 13px;
+}
+
+/* Hovering shows a card's buttons on a computer. A tap acts on the card,
+   a long press opens its menu; the buttons that only a pointer brings up
+   stay as one small button at the end, where a thumb finds them. */
+html[data-mobile] .card-actions {
+  position: static;
+  transform: none;
+  padding: 0;
+  background: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+html[data-mobile] .card-actions .btn.primary {
+  display: none;
+}
+
+html[data-mobile] .card-actions .btn.small {
+  width: 38px;
+  height: 38px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-3);
+}
+
+html[data-mobile] .crumbs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 2px -16px 6px;
+  padding: 0 16px;
+}
+
+html[data-mobile] .crumbs button {
+  flex: none;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+html[data-mobile] .tag-filter {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 2px -16px 6px;
+  padding: 0 16px;
+}
+
+html[data-mobile] .tag-filter .chip {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  font-size: 13px;
+}
+
+html[data-mobile] .empty {
+  padding: 64px 12px;
+}
+
+html[data-mobile] .empty-actions {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  max-width: 300px;
+}
+
+/* --------------------------------------------------------------- form --- */
+
+html[data-mobile] .btn {
+  height: var(--m-tap);
+  padding: 0 16px;
+  font-size: 15px;
+}
+
+html[data-mobile] .btn.small {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13.5px;
+}
+
+html[data-mobile] .btn.icon {
+  width: var(--m-tap);
+}
+
+html[data-mobile] .btn.icon.small {
+  width: 36px;
+}
+
+html[data-mobile] .input,
+html[data-mobile] .select,
+html[data-mobile] textarea.input {
+  min-height: var(--m-tap);
+  font-size: 16px;
+}
+
+html[data-mobile] .search .input {
+  height: var(--m-tap);
+  border-radius: 22px;
+}
+
+html[data-mobile] .field label {
+  font-size: 13.5px;
+}
+
+html[data-mobile] .switch {
+  width: 46px;
+  height: 27px;
+  border-radius: 14px;
+}
+
+html[data-mobile] .switch::after {
+  width: 21px;
+  height: 21px;
+}
+
+html[data-mobile] .switch.on::after {
+  transform: translateX(19px);
+}
+
+html[data-mobile] .segmented button {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+html[data-mobile] .chip {
+  height: 24px;
+  font-size: 12px;
+}
+
+/* ---------------------------------------------- dialogs, sheets, menus --- */
+
+/* A dialog rises from the bottom, the width of the screen, its buttons in reach. */
+html[data-mobile] .overlay {
+  align-items: end;
+  padding: calc(var(--m-top) + 12px) 0 0;
+}
+
+html[data-mobile] .modal,
+html[data-mobile] .modal.wide {
+  max-width: none;
+  border-width: 1px 0 0;
+  border-radius: 22px 22px 0 0;
+  padding-bottom: var(--m-bottom);
+  animation: sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html[data-mobile] .modal-head {
+  padding: 20px 18px 6px;
+}
+
+html[data-mobile] .modal-head h2 {
+  font-size: 18px;
+}
+
+html[data-mobile] .modal-body {
+  padding: 10px 18px 6px;
+}
+
+html[data-mobile] .modal-foot {
+  padding: 14px 18px 16px;
+}
+
+html[data-mobile] .modal-foot .btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(40%);
+    opacity: 0;
+  }
+}
+
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-top: calc(var(--m-top) + 24px);
+  background: var(--overlay);
+  animation: fade 0.16s ease-out;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  padding-bottom: var(--m-bottom);
+  border-top: 1px solid var(--line-strong);
+  border-radius: 22px 22px 0 0;
+  background: var(--bg-2);
+  box-shadow: var(--shadow);
+  animation: sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.18s ease;
+}
+
+.sheet-grab {
+  flex: none;
+  padding: 8px 20px 4px;
+  touch-action: none;
+}
+
+.sheet-grip {
+  display: block;
+  width: 38px;
+  height: 4px;
+  margin: 0 auto 10px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.sheet-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-bottom: 6px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.sheet-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 10px;
+}
+
+.sheet-menu button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: 52px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  text-align: left;
+}
+
+.sheet-menu button:active {
+  background: var(--bg-4);
+}
+
+.sheet-menu button svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--text-2);
+}
+
+.sheet-menu button.danger,
+.sheet-menu button.danger svg {
+  color: var(--danger);
+}
+
+.sheet-menu hr {
+  height: 1px;
+  margin: 6px 14px;
+  border: none;
+  background: var(--line);
+}
+
+.m-sheet-action {
+  width: calc(100% - 12px);
+  margin: 8px 6px 4px;
+}
+
+/* Popovers from a bar's buttons are sheets as well. */
+html[data-mobile] .share-panel {
+  position: fixed;
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  max-height: calc(100% - var(--m-top) - 40px);
+  overflow-y: auto;
+  padding-bottom: var(--m-bottom);
+  border-width: 1px 0 0;
+  border-radius: 22px 22px 0 0;
+  background: var(--bg-2);
+  animation: sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html[data-mobile] .share:has(.share-panel)::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 89;
+  background: var(--overlay);
+}
+
+/* Side panels (a host's settings, a forward, a run) cover the screen. */
+html[data-mobile] .panel {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  width: auto;
+  padding: var(--m-top) var(--m-right) var(--m-bottom) var(--m-left);
+  border: none;
+  background: var(--bg-1);
+  animation: panel-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes panel-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+html[data-mobile] .panel-head {
+  min-height: var(--m-bar);
+  padding: 8px 8px 8px 18px;
+}
+
+html[data-mobile] .panel-head h2 {
+  font-size: 18px;
+}
+
+html[data-mobile] .panel-body {
+  padding: 8px 18px 24px;
+}
+
+html[data-mobile] .panel-foot {
+  padding: 10px 16px 14px;
+}
+
+html[data-mobile] .panel-foot .btn {
+  flex: 1 1 auto;
+}
+
+html[data-mobile] .toasts {
+  left: 16px;
+  right: 16px;
+  bottom: calc(var(--m-nav) + var(--m-bottom) + 12px);
+  align-items: stretch;
+}
+
+html[data-mobile] .app.on-terminal ~ .toasts,
+html[data-mobile] .app.on-terminal .toasts {
+  bottom: calc(96px + var(--m-bottom) + 12px);
+}
+
+html[data-mobile] .toast {
+  max-width: none;
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+html[data-mobile] .tip {
+  max-width: none;
+}
+
+html[data-mobile] .tip.tip-float {
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  width: auto;
+  max-width: none;
+}
+
+/* ----------------------------------------------------------- sessions --- */
+
+.m-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.m-sheet .m-sessions,
+.sheet .m-sessions {
+  padding: 0 6px;
+}
+
+.m-session {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--bg-2);
+}
+
+.m-session.active {
+  border-color: var(--accent-line);
+}
+
+.m-session-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  align-self: stretch;
+  padding: 10px 0 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.m-session-main .dot {
+  width: 9px;
+  height: 9px;
+}
+
+.m-session-mark {
+  flex: none;
+  color: var(--text-2);
+}
+
+.m-session-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.m-session-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15.5px;
+  font-weight: 620;
+}
+
+.m-session-group {
+  margin-left: 8px;
+  color: var(--text-3);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.m-session-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.m-session-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  align-self: stretch;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+}
+
+/* --------------------------------------------------------------- more --- */
+
+.m-more .page-body {
+  padding-top: 16px;
+}
+
+.m-group {
+  margin-bottom: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--bg-2);
+}
+
+.m-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 12px 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.m-row + .m-row {
+  border-top: 1px solid var(--line);
+}
+
+.m-row:active {
+  background: var(--bg-3);
+}
+
+.m-row-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.m-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.m-row-title {
+  font-size: 16px;
+  font-weight: 560;
+}
+
+.m-row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.m-row-chevron {
+  flex: none;
+  color: var(--text-3);
+}
+
+.m-version {
+  padding: 6px 0 20px;
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: center;
+  user-select: text;
+}
+
+/* ----------------------------------------------------------- terminal --- */
+
+.app.mobile.on-terminal > .body {
+  background: var(--bg-0);
+}
+
+html[data-mobile] .term-host {
+  touch-action: pan-y;
+}
+
+/* The keys above the keyboard. */
+.m-keys {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 4px calc(5px + var(--m-bottom));
+  background: var(--bg-0);
+  border-top: 1px solid var(--line);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.m-keys-row {
+  display: flex;
+  gap: 4px;
+}
+
+.m-key {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-3);
+  color: var(--text);
+  font: 600 12px/1 var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.m-key.char {
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.m-key.down {
+  background: var(--bg-4);
+  transform: scale(0.96);
+}
+
+.m-key.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Search sits at the top of the terminal, the width of the screen. */
+html[data-mobile] .term-search {
+  left: 8px;
+  right: 8px;
+  top: 8px;
+}
+
+html[data-mobile] .term-search .input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  height: 40px;
+}
+
+html[data-mobile] .term-search .btn.icon.small {
+  width: 40px;
+  height: 40px;
+}
+
+/* The text of the terminal, to be selected with a finger. */
+.sheet.m-select {
+  height: 100%;
+}
+
+.m-select .sheet-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 12px 10px;
+}
+
+.m-select-hint {
+  flex: none;
+  padding: 0 4px 10px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.m-select-text {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-0);
+  color: var(--text);
+  font: 12.5px/1.45 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.m-select-actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.m-select-actions .btn {
+  flex: 1;
+}
+
+html[data-mobile] .tip-actions {
+  flex-wrap: wrap;
+}
+
+/* A bar's own popover (forwards, sharing, the account) goes over the page under it. */
+.m-bar:has(.share-panel, .account-menu) {
+  z-index: 88;
+}
+
+/* A row of the lists (keys, identities, snippets): its buttons go under
+   it, in a line of their own, rather than squeeze its words. */
+html[data-mobile] .item {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  row-gap: 10px;
+}
+
+html[data-mobile] .item-actions {
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Worded buttons share the line; the icons keep their size at its end. */
+html[data-mobile] .item-actions .btn:not(.icon) {
+  flex: 1 1 auto;
+}
+
+html[data-mobile] .item-actions .btn.small {
+  height: 40px;
+}
+
+html[data-mobile] .item-actions .btn.icon.small {
+  width: 40px;
+}
+
+html[data-mobile] .item-title {
+  font-size: 15.5px;
+}
+
+html[data-mobile] .item-sub {
+  font-size: 13px;
+  white-space: normal;
+}
+
+html[data-mobile] .item-sub.mono {
+  white-space: normal;
+  word-break: break-all;
+}
+
+/* Settings: a switch stays beside its words; anything wider goes under them. */
+html[data-mobile] .setting {
+  flex-wrap: wrap;
+  row-gap: 10px;
+  min-height: 58px;
+  padding: 10px 14px;
+}
+
+html[data-mobile] .setting-text {
+  flex: 1 1 160px;
+}
+
+html[data-mobile] .setting-text .hint {
+  font-size: 13px;
+}
+
+html[data-mobile] .setting .control {
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+}
+
+html[data-mobile] .setting .control:not(:has(> .switch:only-child)) {
+  flex: 1 0 100%;
+  justify-content: flex-start;
+}
+
+html[data-mobile] .setting .control .select,
+html[data-mobile] .setting .control .input {
+  width: 100%;
+}
+
+html[data-mobile] .setting .control .segmented {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+html[data-mobile] .danger-zone {
+  flex-wrap: wrap;
+}
+
+html[data-mobile] .panel-head .btn.icon.small,
+html[data-mobile] .modal-close.btn.icon.small {
+  width: 40px;
+  height: 40px;
+}
+
+/* -------------------------------------------------------------- files --- */
+
+/* One side at a time, chosen above it; a row a finger's height, its name
+   and size; what needs a selection is in the row's menu (a long press). */
+.fm.mobile .fm-sides {
+  flex: none;
+  display: flex;
+  padding: 8px 8px 0;
+}
+
+.fm.mobile .fm-sides .segmented {
+  flex: 1;
+}
+
+.fm.mobile .fm-sides .segmented button {
+  flex: 1;
+  min-height: 38px;
+  font-size: 14.5px;
+}
+
+.fm.mobile .fm-panes {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fm.mobile.on-remote .fm-pane:first-child,
+.fm.mobile.on-local .fm-pane:last-child {
+  display: none;
+}
+
+.fm.mobile .fm-pane.active {
+  border-color: var(--line);
+}
+
+.fm.mobile .fm-pane.active .fm-where {
+  color: var(--text-2);
+}
+
+.fm.mobile .fm-head .btn.icon.small {
+  width: 38px;
+  height: 38px;
+}
+
+.fm.mobile .path-bar .input {
+  height: 38px;
+  font-size: 14px;
+}
+
+.fm.mobile .fm-cols {
+  display: none;
+}
+
+.fm.mobile .file-row {
+  grid-template-columns: 24px minmax(0, 1fr) auto !important;
+  gap: 12px;
+  height: 48px;
+  padding: 0 10px;
+  font-size: 15px;
+}
+
+.fm.mobile .file-row:active {
+  background: var(--bg-3);
+}
+
+.fm.mobile .file-row > :not(.file-icon, .file-name, .file-size) {
+  display: none;
+}
+
+.fm.mobile .file-row .file-size {
+  font-size: 12.5px;
+}
+
+.fm.mobile .file-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.fm.mobile .fm-bar {
+  padding: 8px 8px calc(8px + var(--m-bottom));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.fm.mobile .fm-key {
+  height: 42px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.fm.mobile .fm-key kbd,
+.fm.mobile .fm-key:disabled {
+  display: none;
+}
+
+.fm.mobile .file-row.cursor {
+  border-color: transparent !important;
+}
+
+html[data-mobile] .term-search .count {
+  flex: none;
+  min-width: 0;
+}
+
+/* The terminal's sample in Settings scrolls with the page: held at the top
+   it would cover half of a phone's screen. */
+html[data-mobile] .settings > .with-preview .term-preview {
+  position: static;
+}
+
+html[data-mobile] .empty-actions .btn {
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* Nothing in a dialog makes it wider than the screen: long lines wrap or scroll. */
+html[data-mobile] .overlay {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html[data-mobile] .modal {
+  min-width: 0;
+  width: 100%;
+}
+
+html[data-mobile] .modal-foot .btn {
+  height: auto;
+  min-height: var(--m-tap);
+  padding-top: 8px;
+  padding-bottom: 8px;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.m-link {
+  margin: 0 6px 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-0);
+  color: var(--info);
+  font: 13px/1.45 var(--font-mono);
+  word-break: break-all;
+}
+
+/* Where the app sells nothing, the way to Pro is a word on where it is had. */
+.pro-elsewhere {
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* The cloud's card: its words take the line, its buttons go under them. */
+html[data-mobile] *:has(> .cloud-main) {
+  flex-wrap: wrap;
+}
+
+html[data-mobile] .cloud-main {
+  flex: 1 1 200px;
+  min-width: 0;
+}

@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useT } from "../../lib/i18n";
+import { SELLS_PRO } from "../../lib/platform";
 import { cx } from "../ui";
 import { openAccountPage } from "./status";
 
@@ -17,10 +18,13 @@ export function ProBadge({ className }: { className?: string }) {
 /**
  * The way to Pro: the account's subscription page, opened in the browser
  * already signed in. `onOpen` runs first, to close whatever it sits in.
+ * Where the app sells nothing (Android), only where Pro is to be had, in
+ * words, with no link.
  */
 export function GetProButton({ small, onOpen }: { small?: boolean; onOpen?: () => void }) {
   const t = useT();
   const [opening, setOpening] = useState(false);
+  if (!SELLS_PRO) return <span className="pro-elsewhere">{t("cloud.pro_elsewhere")}</span>;
   return (
     <button
       className={cx("btn primary pro-button", small && "small")}

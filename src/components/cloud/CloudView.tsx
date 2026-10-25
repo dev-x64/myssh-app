@@ -1,6 +1,7 @@
 import { AlertTriangle, Check, Cloud, CloudOff, ExternalLink, Laptop, RefreshCw, ShieldOff } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { reportError } from "../../lib/actions";
+import { SELLS_PRO } from "../../lib/platform";
 import { api, type CloudDevice, type ConflictNote } from "../../lib/api";
 import { syncNow, useCloud } from "../../lib/cloud";
 import { formatAgo, formatDate, useT, type MessageKey, type T } from "../../lib/i18n";
@@ -172,10 +173,12 @@ function Plan() {
               // Offered once on this screen: in the card above, when sync waits for it.
               !offered && <GetProButton />
             ) : (
-              <button className="btn" disabled={opening} title={t("cloud.plan.open.hint")} onClick={() => void open()}>
-                {t("cloud.plan.open")}
-                <ExternalLink size={13} />
-              </button>
+              SELLS_PRO && (
+                <button className="btn" disabled={opening} title={t("cloud.plan.open.hint")} onClick={() => void open()}>
+                  {t("cloud.plan.open")}
+                  <ExternalLink size={13} />
+                </button>
+              )
             )}
           </div>
         </div>

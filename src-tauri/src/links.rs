@@ -19,6 +19,7 @@ pub fn arrived(app: &AppHandle, url: String) {
     }
     let _ = app.emit(ARRIVED, ());
     // Whoever followed the link expects to see the app.
+    #[cfg(desktop)]
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.show();

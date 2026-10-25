@@ -18,6 +18,7 @@ import {
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { errorText, useT, type MessageKey } from "../../lib/i18n";
 import { closeTab, getSession } from "../../lib/sessions";
+import { MOBILE } from "../../lib/platform";
 import { isDark, useSettings } from "../../lib/settings";
 import { useShare } from "../../lib/share";
 import { isLocalTab, useUi, useVault, type Suggestion, type Tab } from "../../lib/store";
@@ -456,7 +457,7 @@ export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
       {tab.searchOpen && <SearchBox tab={tab} />}
 
       {active && !isLocalTab(tab) && tab.status === "connected" && !tab.files && !tab.editor && (
-        <Tip id="terminal" title={t("tip.terminal.title")} className="tip-float" art={<TypingDemo />}>
+        <Tip id="terminal" title={t("tip.terminal.title")} className="tip-float" art={MOBILE ? undefined : <TypingDemo />}>
           {t("tip.terminal.text", { files: keyOf("files"), snippets: keyOf("snippets"), find: keyOf("find") })}
         </Tip>
       )}

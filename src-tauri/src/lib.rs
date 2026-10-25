@@ -9,6 +9,7 @@ mod e2e;
 mod links;
 mod local;
 mod menu_entry;
+#[cfg(desktop)]
 mod menu;
 mod state;
 mod update;
@@ -17,20 +18,44 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_deep_link::init());
+    // On a phone the store brings updates, and links open through the system.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_opener::init());
+    builder
         .manage(links::Pending::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
+            // A phone has no home folder. The phone's side of the file
+            // manager opens in the shared Download folder, where what is
+            // copied from a server is found by the phone's own Files app (an
+            // app may put files there, and sees the ones it put); failing
+            // that, in the app's own folder.
+            #[cfg(target_os = "android")]
+            if std::env::var_os("HOME").is_none() {
+                let storage = std::env::var_os("EXTERNAL_STORAGE")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| "/storage/emulated/0".into());
+                let home = Some(storage.join("Download"))
+                    .filter(|dir| std::fs::read_dir(dir).is_ok())
+                    .unwrap_or_else(|| data_dir.join("files"));
+                let _ = std::fs::create_dir_all(&home);
+                std::env::set_var("HOME", home);
+            }
             let state = state::AppState::open(data_dir);
             cloud::allow_test_server();
             cloud::follow_configured_server(&state);
             app.manage(state);
-            menu::install(app.handle(), "en")?;
-            menu::forward_events(app.handle());
+            #[cfg(desktop)]
+            {
+                menu::install(app.handle(), "en")?;
+                menu::forward_events(app.handle());
+            }
             menu_entry::refresh();
             // On Windows the app draws its own title bar, with the tabs in it,
             // so the system's frame goes; its shadow and rounded corners stay.
@@ -95,6 +120,7 @@ pub fn run() {
             commands::script_check,
             import::import_scan,
             import::import_file,
+            import::import_text,
             import::import_apply,
             import::tailscale_peers,
             menu_entry::menu_entry_status,

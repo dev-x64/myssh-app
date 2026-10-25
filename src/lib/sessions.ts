@@ -15,7 +15,7 @@ import { forgetForwards, forwardsClosed, forwardsConnected } from "./forwards";
 import { onNetworkChange, useNetwork } from "./network";
 import { Highlighter, type HighlightColors } from "./highlight";
 import { t } from "./i18n";
-import { LINUX, WINDOWS } from "./platform";
+import { LINUX, MOBILE, WINDOWS } from "./platform";
 import { fontStack, isDark, onSystemThemeChange, useSettings, type Settings, cursorColorOf, type CursorColor } from "./settings";
 import { useRecent } from "./recent";
 import { hostMayType, shareOutput, shareResize, stopShare } from "./share";
@@ -23,6 +23,9 @@ import { hostTitle, LOCAL_HOST_ID, useUi, useVault, type Tab, type TabGroup } fr
 import { PasswordHelper } from "./passwords";
 import { Suggester } from "./suggest";
 import { resolveTermTheme } from "./themes";
+import { useLinkOffer } from "./linkOffer";
+import { attachMobileInput } from "./mobileInput";
+import { pressKey, withModifiers } from "./touchKeys";
 
 /** Delays before automatic reconnection attempts, in seconds. */
 const RECONNECT_DELAYS = [1, 2, 4, 8, 15, 30, 30, 30];
@@ -195,6 +198,8 @@ export class TermSession {
     if (!this.opened) {
       this.term.open(element);
       this.opened = true;
+      // A phone's keyboard composes words; every letter goes out as it is typed.
+      if (MOBILE) attachMobileInput(this.term, (data) => this.term.input(data, true));
     }
     this.refit();
     if (!this.started) {
@@ -226,7 +231,8 @@ export class TermSession {
   /**
    * Web addresses in the output become links: under the pointer they are
    * underlined, and a click with Cmd (or Ctrl) held opens them in the
-   * browser. A plain click stays what it is in a terminal.
+   * browser. A plain click stays what it is in a terminal. On a phone,
+   * where a tap selects nothing, a tap on one offers to open or copy it.
    */
   private applyLinks(s: Settings) {
     if (s.terminalLinks && !this.links) {
@@ -235,7 +241,8 @@ export class TermSession {
           // Asked again here: a link found before the setting was switched
           // off must not open after it.
           if (!useSettings.getState().terminalLinks) return;
-          if (event.metaKey || event.ctrlKey) void api.openLink(uri).catch(() => {});
+          if (MOBILE) useLinkOffer.getState().offer(uri);
+          else if (event.metaKey || event.ctrlKey) void api.openLink(uri).catch(() => {});
         },
         { hover: (event) => showLinkTip(event), leave: hideLinkTip },
       );
@@ -496,6 +503,38 @@ export class TermSession {
     this.focus();
   }
 
+  /** A key from the bar above a phone's keyboard, pressed as on a keyboard. */
+  press(key: string) {
+    const input = this.term.textarea;
+    if (input) pressKey(input, key);
+  }
+
+  /** Characters from that bar, typed as if from the keyboard (Ctrl and Alt apply). */
+  typeText(text: string) {
+    this.term.input(text, true);
+  }
+
+  /**
+   * The text of the terminal, scrollback and all, for a phone, where the
+   * terminal's own selection cannot be made with a finger: it is shown as
+   * plain text, which can be.
+   */
+  plainText(limit = 2000): string {
+    const buffer = this.term.buffer.active;
+    const end = buffer.length;
+    const lines: string[] = [];
+    for (let y = Math.max(0, end - limit); y < end; y++) {
+      const line = buffer.getLine(y);
+      if (!line) continue;
+      const text = line.translateToString(true);
+      // A wrapped line goes on the line before it.
+      if (line.isWrapped && lines.length) lines[lines.length - 1] += text;
+      else lines.push(text);
+    }
+    while (lines.length && !lines[lines.length - 1]) lines.pop();
+    return lines.join("\n");
+  }
+
   /** Types text and presses Enter after every line. */
   run(text: string) {
     if (this.tab()?.status !== "connected") return;
@@ -609,9 +648,10 @@ export class TermSession {
     return key !== "v";
   }
 
-  private onInput(data: string) {
+  private onInput(typed: string) {
     const tab = this.tab();
     if (!tab) return;
+    const data = MOBILE ? withModifiers(typed) : typed;
     if (tab.status === "closed") {
       if (data === "\r" && tab.prompt === null) this.reconnect();
       return;

@@ -1,0 +1,8 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- The app draws its own dark or light window; until it has, and behind
+         it, the colour of its dark theme, so that starting it does not flash white. -->
+    <style name="Theme.myssh" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/app_background</item>
+    </style>
+</resources>

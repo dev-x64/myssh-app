@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- The Android launcher icon: the same mark as source.svg, on a full square
+       the launcher cuts to its own shape, the mark kept inside its safe zone. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2028"/>
+      <stop offset="1" stop-color="#0b0d10"/>
+    </linearGradient>
+    <linearGradient id="ember" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffb26b"/>
+      <stop offset="1" stop-color="#ff5a36"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <g transform="translate(512 512) scale(0.82) translate(-520 -530)">
+    <path d="M300 372 L468 512 L300 652" fill="none" stroke="url(#ember)" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="528" y="616" width="212" height="72" rx="36" fill="#e6e9ee"/>
+  </g>
+</svg>

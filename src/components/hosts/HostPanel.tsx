@@ -1,5 +1,6 @@
 import { Eraser, Eye, EyeOff, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useBack } from "../../lib/back";
 import { mutate } from "../../lib/actions";
 import {
   api,
@@ -178,6 +179,7 @@ export function HostPanel(props: {
   onSaved?: (host: HostView) => void;
 }) {
   const t = useT();
+  useBack(props.onClose);
   const snapshot = useVault((s) => s.snapshot);
   const editing =
     props.panel.mode === "edit"

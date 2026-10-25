@@ -134,10 +134,16 @@ pub async fn script_check(script: String) -> ScriptCheck {
     ScriptCheck { checked: true, error: Some(text), line }
 }
 
-/// Rebuilds the application menu in the UI language.
+/// Rebuilds the application menu in the UI language. A phone has no menu bar.
 #[tauri::command]
 pub fn menu_set_locale(app: AppHandle, locale: String) -> std::result::Result<(), String> {
-    crate::menu::install(&app, &locale).map_err(|e| e.to_string())
+    #[cfg(desktop)]
+    return crate::menu::install(&app, &locale).map_err(|e| e.to_string());
+    #[cfg(mobile)]
+    {
+        let _ = (app, locale);
+        Ok(())
+    }
 }
 
 #[tauri::command]

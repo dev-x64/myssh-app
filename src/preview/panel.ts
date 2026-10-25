@@ -11,7 +11,7 @@ const LABELS: { [K in keyof Scenario]?: [string, Record<string, string>] } = {
   update: ["Обновление", { none: "нет", available: "есть" }],
   offline: ["Сервер", { false: "доступен", true: "офлайн" }],
   vaultError: ["Хранилище не открылось", { false: "нет", true: "да" }],
-  os: ["Система", { mac: "macOS", windows: "Windows", linux: "Linux" }],
+  os: ["Система", { mac: "macOS", windows: "Windows", linux: "Linux", android: "Android" }],
   ai: ["AI-подсказки", { on: "отвечают", limited: "лимит", off: "выключены" }],
   forwards: ["Переброска портов", { ok: "работает", busy: "порт занят", refused: "нет ответа" }],
   found: ["Хосты для импорта", { true: "найдены", false: "нет" }],

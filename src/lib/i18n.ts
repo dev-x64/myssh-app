@@ -1,6 +1,6 @@
 // UI strings. English is the source of keys; Russian must cover all of them.
 
-import { LINUX, WINDOWS } from "./platform";
+import { ANDROID, LINUX, WINDOWS } from "./platform";
 import { useSettings } from "./settings";
 
 const en = {
@@ -9,6 +9,33 @@ const en = {
   "nav.keychain": "Keychain",
   "nav.known_hosts": "Known hosts",
   "nav.settings": "Settings",
+  // The phone's layout: the tabs along the bottom, and a terminal's own bars.
+  "mnav.sessions": "Sessions",
+  "mnav.more": "More",
+  "mobile.back": "Back",
+  "mobile.sessions.empty.title": "No open sessions",
+  "mobile.sessions.empty.text": "Tap a host to connect. Its terminal opens here and keeps running while you look at something else.",
+  "mobile.sessions.to_hosts": "Choose a host",
+  "mobile.sessions.new": "New connection",
+  "mobile.sessions.close_all": "Close all",
+  "mobile.term.menu": "More",
+  "mobile.term.paste": "Paste",
+  "mobile.term.keyboard": "Keyboard",
+  "mobile.term.select": "Select text",
+  "mobile.term.font": "Text size {n}",
+  "mobile.select.hint": "Press and hold a word, then drag the handles to select.",
+  "mobile.select.copy": "Copy",
+  "mobile.select.copy_all": "Copy all",
+  "mobile.copied": "Copied",
+  "mobile.paste.empty": "The clipboard is empty",
+  "mobile.files.phone": "Phone",
+  "mobile.files.server": "Server",
+  "mobile.more.account": "Account",
+  "mobile.link.title": "Link",
+  "mobile.link.open": "Open in the browser",
+  "mobile.link.copy": "Copy the link",
+  "mobile.keepalive.text": "{n} session connected|{n} sessions connected",
+  "mobile.keepalive.channel": "Open sessions",
 
   "common.save": "Save",
   "common.cancel": "Cancel",
@@ -1070,6 +1097,7 @@ const en = {
   "cloud.status.pro_required": "Sync is part of Pro",
   "cloud.status.pro_required.detail": "Everything stays on this computer. With Pro your hosts, snippets and settings sync between your devices.",
   "cloud.get_pro": "Get Pro",
+  "cloud.pro_elsewhere": "Pro is taken out on myssh.app; once it is, it shows up here by itself.",
   "settings.cursor_color": "Cursor colour",
   "settings.cursor_color.scheme": "As in the colour scheme",
   "settings.cursor_color.text": "Colour of the text",
@@ -1194,6 +1222,32 @@ const ru: Record<MessageKey, string> = {
   "nav.keychain": "Keychain",
   "nav.known_hosts": "Known hosts",
   "nav.settings": "Настройки",
+  "mnav.sessions": "Сессии",
+  "mnav.more": "Ещё",
+  "mobile.back": "Назад",
+  "mobile.sessions.empty.title": "Нет открытых сессий",
+  "mobile.sessions.empty.text": "Нажмите на хост, чтобы подключиться. Терминал откроется здесь и продолжит работать, пока вы заняты другим.",
+  "mobile.sessions.to_hosts": "Выбрать хост",
+  "mobile.sessions.new": "Новое подключение",
+  "mobile.sessions.close_all": "Закрыть все",
+  "mobile.term.menu": "Ещё",
+  "mobile.term.paste": "Вставить",
+  "mobile.term.keyboard": "Клавиатура",
+  "mobile.term.select": "Выделить текст",
+  "mobile.term.font": "Размер текста {n}",
+  "mobile.select.hint": "Нажмите и подержите слово, затем тяните маркеры, чтобы выделить.",
+  "mobile.select.copy": "Копировать",
+  "mobile.select.copy_all": "Копировать всё",
+  "mobile.copied": "Скопировано",
+  "mobile.paste.empty": "В буфере обмена пусто",
+  "mobile.files.phone": "Телефон",
+  "mobile.files.server": "Сервер",
+  "mobile.more.account": "Аккаунт",
+  "mobile.link.title": "Ссылка",
+  "mobile.link.open": "Открыть в браузере",
+  "mobile.link.copy": "Скопировать ссылку",
+  "mobile.keepalive.text": "{n} сессия на связи|{n} сессии на связи|{n} сессий на связи",
+  "mobile.keepalive.channel": "Открытые сессии",
 
   "common.save": "Сохранить",
   "common.cancel": "Отмена",
@@ -2255,6 +2309,7 @@ const ru: Record<MessageKey, string> = {
   "cloud.status.pro_required": "Синхронизация — в Pro",
   "cloud.status.pro_required.detail": "Всё остаётся на этом компьютере. С Pro хосты, сниппеты и настройки синхронизируются между вашими устройствами.",
   "cloud.get_pro": "Оформить Pro",
+  "cloud.pro_elsewhere": "Pro оформляется на myssh.app — после этого он появится здесь сам.",
   "settings.cursor_color": "Цвет курсора",
   "settings.cursor_color.scheme": "Как в цветовой схеме",
   "settings.cursor_color.text": "Цвет текста",
@@ -2497,8 +2552,82 @@ export function forLinux(locale: Locale, key: MessageKey, text: string): string 
   return LINUX_WORDS[locale].reduce((said, [what, instead]) => said.replace(what, instead), text);
 }
 
-if (WINDOWS || LINUX) {
-  const adapt = WINDOWS ? forWindows : forLinux;
+// And on Android, in a phone's terms: "this Mac" is "this phone", and what
+// is done with the pointer and the keyboard is done with a finger.
+const ANDROID_WORDS: Record<Locale, [RegExp, string][]> = {
+  en: [
+    [/ or in Time Machine/g, ""],
+    [/ \(FileVault\)/g, ""],
+    [/\bmacOS\b/g, "Android"],
+    [/⌘ \(or Ctrl\)/g, "Ctrl"],
+    [/⌘/g, "Ctrl"],
+    [/\bDouble-click\b/g, "Tap"],
+    [/\bdouble-click\b/g, "tap"],
+    [/\bRight-click\b/g, "Press and hold"],
+    [/\bright-click\b/g, "press and hold"],
+    [/\bMac\b/g, "phone"],
+  ],
+  ru: [
+    [/ или в Time Machine/g, ""],
+    [/ \(FileVault\)/g, ""],
+    [/\bmacOS\b/g, "Android"],
+    [/⌘ \(или Ctrl\)/g, "Ctrl"],
+    [/⌘/g, "Ctrl"],
+    [/Двойной клик/g, "Нажатие"],
+    [/двойной клик/g, "нажатие"],
+    [/Правый клик/g, "Долгое нажатие"],
+    [/правый клик/g, "долгое нажатие"],
+    [/этом Mac\b/g, "этом телефоне"],
+    [/этого Mac\b/g, "этого телефона"],
+    [/Этот Mac\b/g, "Этот телефон"],
+    [/этот Mac\b/g, "этот телефон"],
+    [/\bMac\b/g, "телефон"],
+  ],
+};
+const ANDROID_TEXT: Record<Locale, Partial<Record<MessageKey, string>>> = {
+  en: {
+    "tip.hosts.text":
+      "Tap a host to connect. Press and hold it for more: edit, duplicate, pin to the top. Open terminals wait under Sessions.",
+    "tip.terminal.text":
+      "Start typing and suggestions appear: ↓ on the bar above the keyboard picks one, Tab inserts it. A request in plain words turns into a command with AI. Ctrl and Alt there apply to the next key you press. Pinch to change the text size.",
+    "tip.files.text":
+      "The server's files, or this phone's: switch above. Tap a folder to open it, a file on the server to edit it right here. Press and hold a file to copy it to the other side, rename or delete it. Back takes you to the terminal.",
+    "tip.forwards.text":
+      "Press Open, and apps on this phone reach the service at localhost and its port: point a database app or the browser there. Forwards marked auto open by themselves with every connection.",
+    "settings.terminal_links.hint": "Web addresses are highlighted; a tap opens them in the browser",
+    "settings.sample.link": "tap",
+    "update.by_store": "Updates come through the app store.",
+    "setup.signed_in.free": "You are on Free.",
+    "sec.disk.unknown":
+      "Android encrypts the phone's storage by itself (on every phone since Android 10): with a screen lock set, nothing on it can be read without it.",
+  },
+  ru: {
+    "tip.hosts.text":
+      "Нажмите на хост — подключиться. Долгое нажатие — остальное: изменить, дублировать, закрепить наверху. Открытые терминалы ждут в «Сессиях».",
+    "tip.terminal.text":
+      "Начните печатать — появятся подсказки: ↓ на панели над клавиатурой выбирает, Tab вставляет. Просьба обычными словами превращается в команду с AI. Ctrl и Alt там действуют на следующую нажатую клавишу. Щипок двумя пальцами меняет размер текста.",
+    "tip.files.text":
+      "Файлы сервера или этого телефона — переключатель сверху. Нажмите на папку, чтобы открыть её, на файл сервера — чтобы править прямо здесь. Долгое нажатие на файл — скопировать на другую сторону, переименовать, удалить. «Назад» возвращает в терминал.",
+    "tip.forwards.text":
+      "Нажмите «Открыть» — и приложения на этом телефоне увидят сервис по адресу localhost и его порту: направьте туда программу для баз данных или браузер. Правила с пометкой «авто» открываются сами при каждом подключении.",
+    "settings.terminal_links.hint": "Веб-адреса подсвечиваются; нажатие открывает их в браузере",
+    "settings.sample.link": "нажатие",
+    "update.by_store": "Обновления приходят через магазин приложений.",
+    "setup.signed_in.free": "Сейчас у вас Free.",
+    "sec.disk.unknown":
+      "Android сам шифрует память телефона (на всех телефонах начиная с Android 10): когда задана блокировка экрана, без неё данные не прочитать.",
+  },
+};
+
+/** A piece of wording as it reads on Android. */
+export function forAndroid(locale: Locale, key: MessageKey, text: string): string {
+  const whole = ANDROID_TEXT[locale][key];
+  if (whole !== undefined) return whole;
+  return ANDROID_WORDS[locale].reduce((said, [what, instead]) => said.replace(what, instead), text);
+}
+
+if (WINDOWS || LINUX || ANDROID) {
+  const adapt = WINDOWS ? forWindows : LINUX ? forLinux : forAndroid;
   for (const locale of Object.keys(dictionaries) as Locale[]) {
     const words = dictionaries[locale];
     for (const key of Object.keys(words) as MessageKey[]) words[key] = adapt(locale, key, words[key]);

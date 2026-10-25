@@ -330,7 +330,7 @@ pub async fn local_open(path: PathBuf, app: Option<String>) -> Result<()> {
 /// `http` and `https` addresses are passed on: what is printed in a
 /// terminal comes from a server and must not get to launch anything else.
 #[tauri::command]
-pub async fn open_link(url: String) -> Result<()> {
+pub async fn open_link(app: tauri::AppHandle, url: String) -> Result<()> {
     let web = (url.starts_with("https://") || url.starts_with("http://"))
         && url.len() <= 4096
         && !url.chars().any(|c| c.is_control() || c.is_whitespace());
@@ -340,9 +340,18 @@ pub async fn open_link(url: String) -> Result<()> {
     if cfg!(debug_assertions) && std::env::var_os("MYSSH_NO_OPEN").is_some() {
         return Ok(());
     }
-    tauri::async_runtime::spawn_blocking(move || open_by_system(std::ffi::OsStr::new(&url)))
-    .await
-    .map_err(|e| Error::Io(std::io::Error::other(e)))?
+    #[cfg(mobile)]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener().open_url(url, None::<&str>).map_err(|e| Error::Io(std::io::Error::other(e.to_string())))
+    }
+    #[cfg(desktop)]
+    {
+        let _ = app;
+        tauri::async_runtime::spawn_blocking(move || open_by_system(std::ffi::OsStr::new(&url)))
+            .await
+            .map_err(|e| Error::Io(std::io::Error::other(e)))?
+    }
 }
 
 /// Shows the page of System Settings where the app is allowed onto the

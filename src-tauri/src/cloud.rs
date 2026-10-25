@@ -248,9 +248,9 @@ pub async fn cloud_plan(state: State<'_, AppState>) -> Result<Option<Plan>> {
 
 /// Opens the account's pages in the browser, signed in as this device.
 #[tauri::command]
-pub async fn cloud_open_account(state: State<'_, AppState>, language: String) -> Result<()> {
+pub async fn cloud_open_account(app: AppHandle, state: State<'_, AppState>, language: String) -> Result<()> {
     let url = cloud::account_page(&*state, &language).await?;
-    crate::files::open_link(url).await
+    crate::files::open_link(app, url).await
 }
 
 /// Ends another device's cloud access. Nothing on that device is erased

@@ -65,7 +65,7 @@ export function createHandler(scenario: Scenario) {
       ? { code: "vault_decrypt", message: "the vault cannot be decrypted", detail: "aead::Error" }
       : null,
     cloud_available: scenario.cloud,
-    updates: true,
+    updates: scenario.os !== "android",
   });
 
   const update = (): UpdateInfo | null =>
@@ -319,6 +319,7 @@ export function createHandler(scenario: Scenario) {
         ],
       },
     ],
+    import_text: ({ name }) => commands.import_file({ path: name }),
     import_file: ({ path }) => ({
       kind: "moba_xterm",
       location: String(path),
