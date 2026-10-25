@@ -6,31 +6,39 @@
 #   scripts/release.sh test                  a test build, asking nothing
 #
 # A test build ("Тестовая сборка" in the menu) is for trying the app out
-# quickly: just MySSH Test.app and MySSH Test.exe in release/test/, with
+# quickly: just MySSH Test.app, MySSH Test.exe and MySSH Test.apk (for
+# phones and the emulator, 64-bit ARM) in release/test/, with
 # no installers, no signatures, no version change and no commit, from the
 # sources as they are, committed or not. It is a separate app (its own
 # identifier, its own data, no updating itself), so it never touches the
 # installed MySSH, and it talks either to the backend in Docker on this
 # Mac, started for it from ../myssh-cloud (MYSSH_CLOUD_DIR), or to the real
-# server. With Windows in it, the backend is published on this Mac's
-# address in the local network, which only test builds accept over plain
-# HTTP; with the Mac alone it stays on 127.0.0.1.
+# server. With Windows or Android in it, the backend is published on this
+# Mac's address in the local network, which only test builds accept over
+# plain HTTP; with the Mac alone it stays on 127.0.0.1.
 #
 # Run without arguments, it shows where things stand (the current version,
 # what was committed since, whether the tools and keys are in place), then
-# asks which version to make, for which systems and with what notes, sums it
-# all up and builds once that is confirmed. Afterwards it offers the next
-# steps: the panel to publish on, the files in Finder, git push.
+# asks which version to make, for which systems (ticked in a list) and with
+# what notes, sums it all up and builds once that is confirmed. Afterwards
+# it offers the next steps: the panel to publish on, the files in Finder,
+# git push.
 #
 # In order:
 #   1. sets the version in Cargo.toml, tauri.conf.json and package.json;
 #   2. builds the app for the Mac (one app for both Apple silicon and Intel)
 #      and its update archive, signed with the release key, then the app for Windows, built here on the Mac, and,
-#      when asked, for Linux, in Docker (scripts/linux-build.sh);
+#      when asked, for Linux, in Docker (scripts/linux-build.sh), and for
+#      Android: the .aab uploaded to Google Play, signed with the Android
+#      key (scripts/android-key.sh makes it; the menu offers to when it is
+#      missing). Google Play is the one place the Android app comes from;
+#      inside it nothing is sold (see SELLS_PRO in src/lib/platform.ts);
 #   3. collects release/<version>/: the archive Macs update from and a .dmg
 #      for first installs, the installer Windows both installs and updates
 #      from, the AppImage Linux does the same with, and latest.json that
-#      describes them all;
+#      describes them all; the Android bundle goes to release/<version>/android/,
+#      apart from what is uploaded to the panel (phones take their updates
+#      from Google Play);
 #   4. commits the version change and tags it v<version> (nothing is pushed
 #      unless asked for in the menu at the end).
 #
@@ -90,6 +98,14 @@
 #   MYSSH_RELEASE_LINUX   "no" leaves Linux out. By default Linux (x86_64) is
 #                         built when Docker is running: an AppImage, which
 #                         is also what copies update from, built in Docker.
+#   MYSSH_RELEASE_ANDROID "no" leaves Android out. By default it is built
+#                         when its tools (scripts/android-env.sh) and key are
+#                         in place.
+#   MYSSH_ANDROID_KEYSTORE
+#                         the key Android builds are signed with
+#                         (default ~/.myssh/android-release.jks)
+#   MYSSH_ANDROID_KEYSTORE_PASSWORD
+#                         its password; asked for when not set
 #   MYSSH_RELEASE_STORE   "yes" also packs the Windows version for the
 #                         Microsoft Store, into release/<version>/store/
 #                         (see scripts/windows-store.sh). That one is built
@@ -240,6 +256,114 @@ choose() {
   CHOICE=$sel
 }
 
+# A list of things to tick, worked like a menu: Enter on an item ticks it
+# or unticks it, Enter on "Готово" (where the marker starts) goes on. It is
+# drawn again in place after each tick. `label KEY` prints an item's line,
+# `toggle KEY` ticks or unticks it, and may say why not with `say` (each
+# line said is cleared with the list on the next draw); one that asks
+# something itself sets CHECK_KEEP, and the list is then drawn below.
+CHECK_SAID=0
+CHECK_KEEP=""
+say() {
+  echo "  $*"
+  CHECK_SAID=$((CHECK_SAID + 1))
+}
+checklist() {
+  local title="$1" label="$2" toggle="$3"
+  shift 3
+  local keys=("$@") items key sel=$# drawn=""
+  while :; do
+    items=()
+    for key in "${keys[@]}"; do items+=("$($label "$key")"); done
+    items+=("${B}Готово${R}")
+    if [ -n "$drawn" ] && [ -z "$CHECK_KEEP" ]; then
+      printf '\033[%dA\033[J' $((${#items[@]} + 2 + CHECK_SAID))
+    fi
+    CHECK_SAID=0
+    CHECK_KEEP=""
+    choose "$title" "$sel" "${items[@]}"
+    drawn="yes"
+    [ "$CHOICE" -lt "${#keys[@]}" ] || break
+    sel=$CHOICE
+    $toggle "${keys[$CHOICE]}"
+  done
+}
+# A box ticked or not, for checklist's lines.
+tick() { if [ "$1" = "yes" ]; then printf '[%s✓%s]' "$G" "$R"; else printf '[ ]'; fi; }
+
+# Android: what the list says is missing, and making the key from the menu.
+android_ready() { [ "${#ANDROID_MISSING[@]}" -eq 0 ]; }
+android_tools_said() {
+  say "${Y}Для Android сначала установи:${R}"
+  local command
+  for command in "${ANDROID_MISSING[@]}"; do say "  $command"; done
+}
+make_android_key() {
+  local password again
+  CHECK_KEEP="yes"
+  echo
+  echo "${B}Ключа для Android ещё нет.${R} Им подписывается приложение: обновление встанет только"
+  echo "поверх копии с тем же ключом, и Google Play привязывает приложение к нему — потеряешь,"
+  echo "обновлять будет нечем. Он ляжет в $MYSSH_ANDROID_KEYSTORE; сохрани копию и пароль отдельно."
+  choose "Создать ключ?" 0 "Создать сейчас" "Не сейчас  ${D}Android останется не отмечен${R}"
+  [ "$CHOICE" -eq 0 ] || return 1
+  while :; do
+    read -r -s -p "  Пароль для ключа (от 6 символов; Enter — отмена): " password; echo
+    [ -n "$password" ] || return 1
+    if [ "${#password}" -lt 6 ]; then
+      echo "  ${Y}Нужно хотя бы 6 символов${R}"
+      continue
+    fi
+    read -r -s -p "  Ещё раз: " again; echo
+    [ "$password" = "$again" ] && break
+    echo "  ${Y}Не совпали — ещё раз${R}"
+  done
+  local said
+  if said="$(MYSSH_ANDROID_KEYSTORE_PASSWORD="$password" scripts/android-key.sh 2>&1)"; then
+    ANDROID_KEY="yes"
+    # The build takes it from here instead of asking for it again.
+    export MYSSH_ANDROID_KEYSTORE_PASSWORD="$password"
+    ok "ключ создан: $MYSSH_ANDROID_KEYSTORE"
+    return 0
+  fi
+  bad "ключ не создался: $(tail -n 1 <<< "$said")"
+  return 1
+}
+
+# The phones and emulators connected, by their model's name.
+android_names() {
+  local serial
+  for serial in $(android_devices); do
+    adb -s "$serial" shell getprop ro.product.model 2> /dev/null | tr -d '\r' || echo "$serial"
+  done | paste -sd, - | sed 's/,/, /g'
+}
+# The menu's line for putting the Android app onto them.
+android_install_item() {
+  local names
+  names="$(android_names)"
+  if [ -n "$names" ]; then
+    echo "Установить на телефон  ${D}$names, по adb${R}"
+  else
+    echo "Установить на телефон  ${D}подключи его по USB (с отладкой по USB) или запусти эмулятор${R}"
+  fi
+}
+# Puts an .apk onto every phone and emulator connected.
+android_install() {
+  local apk="$1" serial name answer any=""
+  for serial in $(android_devices); do
+    any="yes"
+    name="$(adb -s "$serial" shell getprop ro.product.model 2> /dev/null | tr -d '\r')"
+    if answer="$(adb -s "$serial" install -r "$apk" 2>&1)"; then
+      ok "установлено на ${name:-$serial}"
+    elif grep -q "UPDATE_INCOMPATIBLE\|signatures do not match" <<< "$answer"; then
+      bad "на ${name:-$serial} стоит копия, подписанная другим ключом: удали её там (или adb -s $serial uninstall <пакет>) и повтори"
+    else
+      bad "на ${name:-$serial} не встало: $(tail -n 1 <<< "$answer")"
+    fi
+  done
+  [ -n "$any" ] || warn "ни телефона, ни эмулятора не видно: подключи телефон по USB с включённой отладкой по USB или запусти эмулятор"
+}
+
 # Plain words for a span of seconds.
 minutes() {
   local s="$1"
@@ -287,6 +411,17 @@ done
 [ -z "$SIGNED" ] || command -v osslsigncode > /dev/null || WIN_MISSING+=("brew install osslsigncode")
 STORE_TOOL=""
 [ ! -x "$MAKEMSIX" ] || STORE_TOOL="yes"
+
+# Android: its tools (JDK, SDK and NDK, Rust's libraries for phones) and the
+# key the app is signed with. Built by default when both are in place.
+# shellcheck source=android-env.sh
+source scripts/android-env.sh
+export MYSSH_ANDROID_KEYSTORE="${MYSSH_ANDROID_KEYSTORE:-$HOME/.myssh/android-release.jks}"
+ANDROID_KEY=""
+[ ! -f "$MYSSH_ANDROID_KEYSTORE" ] || ANDROID_KEY="yes"
+ANDROID_DEFAULT="no"
+[ "${#ANDROID_MISSING[@]}" -gt 0 ] || [ -z "$ANDROID_KEY" ] || ANDROID_DEFAULT="yes"
+ANDROID="${MYSSH_RELEASE_ANDROID:-$ANDROID_DEFAULT}"
 
 # The Mac app is signed with a Developer ID when there is one, and
 # notarized when notarytool has its profile (asking Apple takes a moment).
@@ -361,33 +496,69 @@ build_kind() {
   [ "$WINDOWS" != "yes" ] || kind="mac+windows"
   [ "$WINDOWS" != "yes" ] || [ "$STORE_TOO" != "yes" ] || kind="mac+windows+store"
   [ "$LINUX" != "yes" ] || kind="$kind+linux"
+  [ "$ANDROID" != "yes" ] || kind="$kind+android"
   echo "$kind"
 }
 
 # ------------------------------------------------------------ test build ---
 # The app alone, for each system asked for, quickly: see the top of this
 # file. Ends the script.
+# The systems a test build is for, ticked in a list.
+TEST_MAC="yes"
+TEST_WINDOWS="no"
+TEST_ANDROID="no"
+test_label() {
+  case "$1" in
+    mac) echo "$(tick "$TEST_MAC") Mac  ${D}MySSH Test.app${R}" ;;
+    windows)
+      local note="MySSH Test.exe, запускать в виртуалке"
+      [ "${#WIN_MISSING[@]}" -eq 0 ] || note="нет инструментов"
+      echo "$(tick "$TEST_WINDOWS") Windows  ${D}$note${R}"
+      ;;
+    android)
+      local note="MySSH Test.apk, для телефона или эмулятора"
+      android_ready || note="нет инструментов"
+      echo "$(tick "$TEST_ANDROID") Android  ${D}$note${R}"
+      ;;
+  esac
+}
+test_toggle() {
+  case "$1" in
+    mac) if [ "$TEST_MAC" = "yes" ]; then TEST_MAC="no"; else TEST_MAC="yes"; fi ;;
+    windows)
+      if [ "$TEST_WINDOWS" = "yes" ]; then
+        TEST_WINDOWS="no"
+      elif [ "${#WIN_MISSING[@]}" -gt 0 ]; then
+        say "${Y}Для Windows сначала установи:${R}"
+        local command
+        for command in "${WIN_MISSING[@]}"; do say "  $command"; done
+      else
+        TEST_WINDOWS="yes"
+      fi
+      ;;
+    android)
+      if [ "$TEST_ANDROID" = "yes" ]; then
+        TEST_ANDROID="no"
+      elif ! android_ready; then
+        android_tools_said
+      else
+        TEST_ANDROID="yes"
+      fi
+      ;;
+  esac
+}
+
 test_build() {
-  local windows="no" mac="yes" server="docker" url addr config started out
+  local windows="no" mac="yes" android="no" server="docker" url addr config android_config started out
   [ "${#WIN_MISSING[@]}" -gt 0 ] || windows="yes"
   if [ -n "$MENU" ]; then
-    local both="Mac и Windows" only_win="Только Windows" default=0
-    [ "${#WIN_MISSING[@]}" -eq 0 ] || { both="$both  ${D}(нет инструментов)${R}"; only_win="$only_win  ${D}(нет инструментов)${R}"; default=1; }
+    [ "${#WIN_MISSING[@]}" -gt 0 ] || TEST_WINDOWS="yes"
     while :; do
-      choose "Для каких систем?" "$default" "$both" "Только Mac" "$only_win"
-      if [ "$CHOICE" -ne 1 ] && [ "${#WIN_MISSING[@]}" -gt 0 ]; then
-        echo "  ${Y}Для Windows сначала установи:${R}"
-        printf '    %s\n' "${WIN_MISSING[@]}"
-        default=1
-        continue
-      fi
-      break
+      checklist "Для каких систем? ${D}(Enter — отметить, «Готово» — дальше)${R}" test_label test_toggle mac windows android
+      [ "$TEST_MAC$TEST_WINDOWS$TEST_ANDROID" = "nonono" ] || break
+      echo "  ${Y}Отметь хотя бы одну систему${R}"
     done
-    case "$CHOICE" in
-      0) mac="yes" windows="yes" ;;
-      1) mac="yes" windows="no" ;;
-      2) mac="no" windows="yes" ;;
-    esac
+    mac="$TEST_MAC" windows="$TEST_WINDOWS" android="$TEST_ANDROID"
     choose "С каким сервером?" 0 \
       "Бэкенд в Docker на этом Mac  ${D}поднимется сам из $(basename "$CLOUD_DIR")${R}" \
       "Рабочий  ${D}$SERVER${R}"
@@ -395,6 +566,7 @@ test_build() {
   fi
   [ "$windows" = "no" ] || [ "${#WIN_MISSING[@]}" -eq 0 ] \
     || fail "для Windows не хватает: ${WIN_MISSING[*]}"
+  [ "$android" = "no" ] || android_ready || fail "для Android не хватает: ${ANDROID_MISSING[*]}"
 
   if [ "$server" = "docker" ]; then
     [ -f "$CLOUD_DIR/docker-compose.yml" ] || fail "нет бэкенда в $CLOUD_DIR (укажи папку в MYSSH_CLOUD_DIR)"
@@ -413,11 +585,12 @@ test_build() {
       done
     fi
     addr="127.0.0.1"
-    if [ "$windows" = "yes" ]; then
-      # The Windows copy runs elsewhere (a virtual machine): it needs this
-      # Mac's address in the network, not loopback.
+    if [ "$windows" = "yes" ] || [ "$android" = "yes" ]; then
+      # The Windows copy runs elsewhere (a virtual machine), the Android one
+      # on a phone or in the emulator: they need this Mac's address in the
+      # network, not loopback.
       addr="$(ipconfig getifaddr en0 2> /dev/null || ipconfig getifaddr en1 2> /dev/null || true)"
-      [ -n "$addr" ] || fail "не понял адрес этого Mac в сети (en0/en1): Windows будет не до чего достучаться"
+      [ -n "$addr" ] || fail "не понял адрес этого Mac в сети (en0/en1): Windows и Android будет не до чего достучаться"
     fi
     url="http://$addr:8787"
     echo "${B}release: бэкенд в Docker на $url${R}"
@@ -450,6 +623,17 @@ if url.startswith("http://"):
     config["app"] = {"security": {"csp": conf["app"]["security"]["csp"] + " ws://" + url[len("http://"):]}}
 print(json.dumps(config))
 ' "$url")"
+  # Android: the same socket allowed; its separate identity and name come
+  # from the Android project (MYSSH_ANDROID_TEST), its links stay myssh://.
+  android_config="$(python3 -c '
+import json, sys
+url = sys.argv[1]
+conf = json.load(open("src-tauri/tauri.conf.json"))
+config = {}
+if url.startswith("http://"):
+    config["app"] = {"security": {"csp": conf["app"]["security"]["csp"] + " ws://" + url[len("http://"):]}}
+print(json.dumps(config))
+' "$url")"
   out="release/test"
   rm -rf "$out"
   mkdir -p "$out"
@@ -467,6 +651,13 @@ print(json.dumps(config))
       npx tauri build --runner cargo-xwin --target "$WIN_TARGET" --no-bundle -c "$config"
     cp "$BUILD_DIR/$WIN_TARGET/release/myssh.exe" "$out/MySSH Test.exe"
   fi
+  if [ "$android" = "yes" ]; then
+    # A development build: signed by Android's debug key, plain HTTP
+    # allowed, for 64-bit ARM, which phones and the emulator on this Mac are.
+    echo "${B}release: тестовая сборка для Android${R}"
+    MYSSH_ANDROID_TEST=1 npx tauri android build --debug --apk --target aarch64 -c "$android_config"
+    cp "$ANDROID_OUTPUTS/apk/universal/debug/app-universal-debug.apk" "$out/MySSH Test.apk"
+  fi
   find release -name .DS_Store -delete 2> /dev/null || true
 
   echo
@@ -474,10 +665,25 @@ print(json.dumps(config))
   echo "В $out/ ${D}(сервер: $url)${R}:"
   du -sh "$out"/* | sed "s|$out/||; s/^/  /"
   [ "$windows" = "no" ] || echo "${D}Windows: скопируй MySSH Test.exe в виртуалку и запусти; ему нужен WebView2, он есть в Windows 10 и 11.${R}"
+  [ "$android" = "no" ] || echo "${D}Android: поставь MySSH Test.apk на телефон (или из меню ниже по USB); он ставится рядом с MySSH и сервер видит по адресу в сети.${R}"
   notify "Тестовая сборка готова"
   if [ -n "$MENU" ]; then
-    choose "Что дальше?" 0 "Показать в Finder" "Выйти"
-    [ "$CHOICE" -ne 0 ] || open "$out" || true
+    local finder="Показать в Finder" install=""
+    while :; do
+      if [ "$android" = "yes" ]; then
+        install="$(android_install_item)"
+        choose "Что дальше?" 0 "$finder" "$install" "Выйти"
+        case "$CHOICE" in
+          0) open "$out" || true; finder="${G}✓${R} Показать в Finder" ;;
+          1) android_install "$out/MySSH Test.apk" ;;
+          2) break ;;
+        esac
+      else
+        choose "Что дальше?" 0 "$finder" "Выйти"
+        [ "$CHOICE" -ne 0 ] || open "$out" || true
+        break
+      fi
+    done
   fi
   exit 0
 }
@@ -489,7 +695,7 @@ BUILD_DIR="${CARGO_TARGET_DIR:-target}"
 if [ -n "$MENU" ]; then
   choose "Что собрать?" 0 \
     "Выпуск  ${D}версия, установщики, подписи, коммит и тег${R}" \
-    "Тестовая сборка  ${D}только .app и .exe, без установщиков и подписей, с бэкендом в Docker${R}"
+    "Тестовая сборка  ${D}только .app, .exe и .apk, без установщиков и подписей, с бэкендом в Docker${R}"
   [ "$CHOICE" -eq 0 ] || test_build
 
   # ------------------------------------------------- where things stand ---
@@ -538,6 +744,13 @@ if [ -n "$MENU" ]; then
     ok "инструменты для Windows на месте"
   else
     warn "для Windows не хватает: ${WIN_MISSING[*]}"
+  fi
+  if android_ready && [ -n "$ANDROID_KEY" ]; then
+    ok "инструменты и ключ для Android на месте"
+  elif android_ready; then
+    warn "нет ключа для Android: создать его можно в меню, отметив Android"
+  else
+    warn "для Android не хватает: ${ANDROID_MISSING[*]}"
   fi
   if [ -n "$DOCKER" ]; then
     ok "Docker запущен: можно собрать и для Linux"
@@ -594,53 +807,91 @@ if [ -n "$MENU" ]; then
     esac
   }
 
-  pick_systems() {
-    local all="Mac, Windows и Linux" windows="Mac и Windows" store="Mac, Windows, Linux и Microsoft Store" default=0
-    local no_win="" no_docker=""
-    [ "${#WIN_MISSING[@]}" -eq 0 ] || no_win="yes"
-    docker info > /dev/null 2>&1 || no_docker="yes"
-    [ -z "$no_win" ] || { all="$all  ${D}(нет инструментов для Windows)${R}"; windows="$windows  ${D}(нет инструментов)${R}"; }
-    [ -n "$no_win" ] || [ -z "$no_docker" ] || all="$all  ${D}(Docker не запущен)${R}"
-    [ -n "$STORE_TOOL" ] || store="$store  ${D}(нет makemsix: scripts/msix-tool.sh)${R}"
-    # What was chosen before, or what can be built at all.
-    if [ "$WINDOWS" != "yes" ]; then
-      default=2
-    elif [ "$STORE_TOO" = "yes" ]; then
-      default=3
-    elif [ "$LINUX" != "yes" ] || [ -n "$no_docker" ]; then
-      default=1
-    fi
-    [ -z "$no_win" ] || default=2
-    while :; do
-      choose "Для каких систем собрать?" "$default" \
-        "$all  ${D}Linux — в Docker, ещё минут 5–15${R}" \
-        "$windows" \
-        "Только Mac  ${D}быстрее; остальные останутся на прошлой версии${R}" \
-        "$store"
-      if [ "$CHOICE" -ne 2 ] && [ -n "$no_win" ]; then
-        echo "  ${Y}Для Windows сначала установи:${R}"
-        printf '    %s\n' "${WIN_MISSING[@]}"
-        default=2
-        continue
-      fi
-      if { [ "$CHOICE" -eq 0 ] || [ "$CHOICE" -eq 3 ]; } && ! docker info > /dev/null 2>&1; then
-        echo "  ${Y}Для Linux сначала запусти Docker (OrbStack или Docker Desktop)${R}"
-        default=1
-        continue
-      fi
-      if [ "$CHOICE" -eq 3 ] && [ -z "$STORE_TOOL" ]; then
-        echo "  ${Y}Для Microsoft Store сначала запусти scripts/msix-tool.sh${R}"
-        default=0
-        continue
-      fi
-      break
-    done
-    case "$CHOICE" in
-      0) WINDOWS="yes" LINUX="yes" STORE_TOO="no" ;;
-      1) WINDOWS="yes" LINUX="no" STORE_TOO="no" ;;
-      2) WINDOWS="no" LINUX="no" STORE_TOO="no" ;;
-      3) WINDOWS="yes" LINUX="yes" STORE_TOO="yes" ;;
+  # The systems, ticked in a list. The Mac is always built: its version is
+  # the one the others are released with.
+  system_label() {
+    local note
+    case "$1" in
+      mac) echo "$(tick yes) Mac  ${D}Apple silicon и Intel, $(mac_signing); собирается всегда${R}" ;;
+      windows)
+        note="x64, $([ -n "$SIGNED" ] && echo "подписанный" || echo "без подписи")"
+        [ "${#WIN_MISSING[@]}" -eq 0 ] || note="нет инструментов"
+        echo "$(tick "$WINDOWS") Windows  ${D}$note${R}"
+        ;;
+      linux)
+        note="AppImage, в Docker, ещё минут 5–15"
+        docker info > /dev/null 2>&1 || note="Docker не запущен"
+        echo "$(tick "$LINUX") Linux  ${D}$note${R}"
+        ;;
+      store)
+        note="пакет .msix для Partner Center"
+        [ -n "$STORE_TOOL" ] || note="нет makemsix: scripts/msix-tool.sh"
+        echo "$(tick "$STORE_TOO") Microsoft Store  ${D}$note${R}"
+        ;;
+      android)
+        note=".aab для Google Play"
+        if ! android_ready; then
+          note="нет инструментов"
+        elif [ -z "$ANDROID_KEY" ]; then
+          note="$note; ключа ещё нет — создам"
+        fi
+        echo "$(tick "$ANDROID") Android  ${D}$note${R}"
+        ;;
     esac
+  }
+  system_toggle() {
+    local command
+    case "$1" in
+      mac) say "${D}Mac собирается всегда: с него и номер, и описание выпуска${R}" ;;
+      windows)
+        if [ "$WINDOWS" = "yes" ]; then
+          WINDOWS="no" STORE_TOO="no"
+        elif [ "${#WIN_MISSING[@]}" -gt 0 ]; then
+          say "${Y}Для Windows сначала установи:${R}"
+          for command in "${WIN_MISSING[@]}"; do say "  $command"; done
+        else
+          WINDOWS="yes"
+        fi
+        ;;
+      linux)
+        if [ "$LINUX" = "yes" ]; then
+          LINUX="no"
+        elif ! docker info > /dev/null 2>&1; then
+          say "${Y}Для Linux сначала запусти Docker (OrbStack или Docker Desktop)${R}"
+        else
+          LINUX="yes"
+        fi
+        ;;
+      store)
+        if [ "$STORE_TOO" = "yes" ]; then
+          STORE_TOO="no"
+        elif [ -z "$STORE_TOOL" ]; then
+          say "${Y}Для Microsoft Store сначала запусти scripts/msix-tool.sh${R}"
+        elif [ "${#WIN_MISSING[@]}" -gt 0 ]; then
+          say "${Y}Пакет для Store собирается из версии для Windows, а для неё не хватает инструментов${R}"
+        else
+          STORE_TOO="yes" WINDOWS="yes"
+        fi
+        ;;
+      android)
+        if [ "$ANDROID" = "yes" ]; then
+          ANDROID="no"
+        elif ! android_ready; then
+          android_tools_said
+        elif [ -n "$ANDROID_KEY" ] || make_android_key; then
+          ANDROID="yes"
+        fi
+        ;;
+    esac
+  }
+  pick_systems() {
+    # What cannot be built now starts unticked.
+    [ "${#WIN_MISSING[@]}" -eq 0 ] || WINDOWS="no" STORE_TOO="no"
+    [ -n "$STORE_TOOL" ] || STORE_TOO="no"
+    docker info > /dev/null 2>&1 || LINUX="no"
+    android_ready || ANDROID="no"
+    checklist "Для каких систем собрать? ${D}(Enter — отметить, «Готово» — дальше)${R}" \
+      system_label system_toggle mac windows linux store android
   }
 
   # The notes live in notes.txt, which git leaves alone. Old notes are
@@ -725,6 +976,7 @@ PY
       [ "$STORE_TOO" != "yes" ] || SYSTEMS="$SYSTEMS, Microsoft Store"
     fi
     [ "$LINUX" != "yes" ] || SYSTEMS="$SYSTEMS, Linux (x86_64, AppImage)"
+    [ "$ANDROID" != "yes" ] || SYSTEMS="$SYSTEMS, Android (.aab для Google Play)"
     BEFORE="$(took_before "$(build_kind)")"
     echo
     echo "${B}Итого${R}"
@@ -735,7 +987,7 @@ PY
     echo "  GitHub    $([ "$GITHUB" = "yes" ] && echo "выложить и туда (github.com/$REPO)" || echo "${D}нет${R}")"
     [ -z "$BEFORE" ] || echo "  Займёт    ${D}около $(minutes "$BEFORE"), как в прошлый раз${R}"
     choose "Собрать?" 0 \
-      "Собрать  ${D}потом спросит пароль ключа${R}" \
+      "Собрать  ${D}потом спросит $( [ "$ANDROID" = "yes" ] || { [ "$WINDOWS" = "yes" ] && [ -n "$SIGNED" ]; } && echo "пароли ключей" || echo "пароль ключа")${R}" \
       "Изменить версию" \
       "Изменить системы" \
       "Изменить заметки" \
@@ -776,6 +1028,10 @@ if [ -z "$MENU" ] && [ -z "$NOTARIZE" ]; then
 fi
 [ "$GITHUB" != "yes" ] || command -v gh > /dev/null || fail "для выкладки на GitHub нужен GitHub CLI: brew install gh"
 [ -z "$MAC_MISSING" ] || fail "для приложения под Intel-маки сначала: $MAC_MISSING"
+if [ "$ANDROID" = "yes" ]; then
+  android_ready || fail "для Android не хватает: ${ANDROID_MISSING[*]} (или собери без него: MYSSH_RELEASE_ANDROID=no)"
+  [ -n "$ANDROID_KEY" ] || fail "нет ключа для Android в $MYSSH_ANDROID_KEYSTORE; его делает scripts/android-key.sh"
+fi
 
 if [ "$WINDOWS" = "yes" ]; then
   MISSING=()
@@ -825,6 +1081,24 @@ if [ "$WINDOWS" = "yes" ] && [ -n "$SIGNED" ]; then
   [ -x "$OPENSSL" ] || OPENSSL="$(command -v openssl)"
   "$OPENSSL" pkcs12 -in "$WIN_CERT" -passin env:MYSSH_WINDOWS_CERT_PASSWORD -nokeys -noout 2> /dev/null \
     || fail "пароль не подходит к сертификату $WIN_CERT"
+fi
+# And the Android key's, opened with it to be sure.
+if [ "$ANDROID" = "yes" ]; then
+  for ATTEMPT in 1 2 3; do
+    TYPED=""
+    if [ -z "${MYSSH_ANDROID_KEYSTORE_PASSWORD:-}" ]; then
+      read -r -s -p "Пароль ключа для Android: " MYSSH_ANDROID_KEYSTORE_PASSWORD; echo
+      TYPED="yes"
+    fi
+    export MYSSH_ANDROID_KEYSTORE_PASSWORD
+    "$JAVA_HOME/bin/keytool" -list -keystore "$MYSSH_ANDROID_KEYSTORE" \
+      -storepass:env MYSSH_ANDROID_KEYSTORE_PASSWORD > /dev/null 2>&1 && break
+    if [ -z "$TYPED" ] || [ "$ATTEMPT" = 3 ]; then
+      fail "пароль не подходит к ключу $MYSSH_ANDROID_KEYSTORE"
+    fi
+    echo "${Y}Пароль не тот.${R} Символы при вводе не видны: проверь раскладку и Caps Lock." >&2
+    unset MYSSH_ANDROID_KEYSTORE_PASSWORD
+  done
 fi
 [ -z "$MENU" ] || echo "${D}Дальше всё само; можно заняться другим — в конце будет уведомление.${R}"
 
@@ -1052,6 +1326,18 @@ if [ "$LINUX" = "yes" ]; then
   FILES+=("$OUT/$APPIMAGE")
 fi
 
+# Android: the bundle for Google Play, signed with the Android key, for all
+# four kinds of processor phones have; Google Play makes each phone's app
+# from it. Apart from the panel's files: phones are not updated from it.
+ANDROID_OUT=""
+if [ "$ANDROID" = "yes" ]; then
+  echo "${B}release: сборка для Android${R}"
+  npx tauri android build --aab
+  ANDROID_OUT="$OUT/android"
+  mkdir -p "$ANDROID_OUT"
+  cp "$ANDROID_OUTPUTS/bundle/universalRelease/app-universal-release.aab" "$ANDROID_OUT/MySSH_${VERSION}_android.aab"
+fi
+
 python3 - "$VERSION" "https://github.com/$REPO/releases/download/v$VERSION" "$OUT/latest.json" "$NOTES_FILE" \
   "${UPDATES[@]}" <<'PY'
 import datetime, json, sys
@@ -1095,6 +1381,8 @@ fi
 # releases are left where they are.
 rm -rf "${BUILD_DIR:?}/release/bundle" "${BUILD_DIR:?}/$MAC_TARGET/release/bundle" "${BUILD_DIR:?}/debug" dist
 rm -rf "${BUILD_DIR:?}/$WIN_TARGET/release/bundle" "${BUILD_DIR:?}/$WIN_TARGET/debug" "${BUILD_DIR:?}/linux-bundle"
+rm -rf src-tauri/gen/android/app/build
+for TARGET in "${ANDROID_TARGETS[@]}"; do rm -rf "${BUILD_DIR:?}/$TARGET/debug"; done
 find release -name .DS_Store -delete 2> /dev/null || true
 
 # Remembered, to say next time how long it will take.
@@ -1107,7 +1395,11 @@ mv "$TIMES.new" "$TIMES"
 echo
 echo "${G}${B}Готово: MySSH $VERSION за $(minutes "$TOOK").${R}"
 echo "Файлы в $OUT/:"
-ls -lh "$OUT" | tail -n +2 | awk '{ printf "  %-6s %s\n", $5, $9 }'
+ls -lh "$OUT" | tail -n +2 | awk '$1 !~ /^d/ { printf "  %-6s %s\n", $5, $9 }'
+if [ -n "$ANDROID_OUT" ]; then
+  echo "Для Google Play, в $ANDROID_OUT/ ${D}(на панель не загружается)${R}:"
+  ls -lh "$ANDROID_OUT" | tail -n +2 | awk '{ printf "  %-6s %s\n", $5, $9 }'
+fi
 echo "Коммит «Release ${VERSION}» и тег v$VERSION — только локально."
 
 # Uploaded, not sent: that is for the owner, on the page it names.
@@ -1133,6 +1425,7 @@ if [ -z "$MENU" ]; then
     echo "Чтобы выпустить: открой $SERVER/admin/updates, загрузи файлы из $OUT/ и сделай $VERSION текущей."
   fi
   [ -z "$STORE" ] || echo "Для Microsoft Store: отправь $STORE в Partner Center."
+  [ -z "$ANDROID_OUT" ] || echo "Для Google Play: загрузи $ANDROID_OUT/MySSH_${VERSION}_android.aab в Play Console."
   exit 0
 fi
 
@@ -1161,6 +1454,7 @@ else
 fi
 echo "тогда установленные копии предложат обновиться."
 [ -z "$STORE" ] || echo "Для Microsoft Store: отправить $STORE в Partner Center."
+[ -z "$ANDROID_OUT" ] || echo "Для Google Play: загрузить $ANDROID_OUT/MySSH_${VERSION}_android.aab в Play Console."
 panel_items
 PUSH="Отправить в GitHub  ${D}git push и тег v$VERSION${R}"
 while :; do
