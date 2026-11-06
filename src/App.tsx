@@ -22,7 +22,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AccountMenu } from "./components/cloud/AccountMenu";
 import { CloudView } from "./components/cloud/CloudView";
 import { Welcome } from "./components/cloud/Welcome";
@@ -37,6 +37,7 @@ import { RunGroupList } from "./components/terminal/RunGroup";
 import { TerminalPane } from "./components/terminal/TerminalPane";
 import { ContextMenu, cx, Toasts, type MenuEntry } from "./components/ui";
 import { api } from "./lib/api";
+import { startDrag, startFileDrops } from "./lib/drag";
 import { startCloud } from "./lib/cloud";
 import { startPlan } from "./lib/plan";
 import { errorText, translate, useT, type MessageKey } from "./lib/i18n";
@@ -45,6 +46,8 @@ import { NewTab } from "./components/hosts/NewTab";
 import { GuestPane, SharingOffDialog } from "./components/terminal/GuestPane";
 import { ForwardsButton } from "./components/terminal/ForwardsPanel";
 import { ShareButton, ShareMark } from "./components/terminal/SharePanel";
+import { AgentButton, AgentMark } from "./components/terminal/AgentPanel";
+import { startAgents } from "./lib/agents";
 import { leaveShare, receiveInvite, startGuestSync } from "./lib/guest";
 import { UpdateButton, UpdateNotice } from "./components/UpdateNotice";
 import { MenuEntryOffer } from "./components/MenuEntry";
@@ -205,6 +208,8 @@ function useBootstrap() {
     startPlan();
     startUpdates();
     startGuestSync();
+    startFileDrops();
+    startAgents();
     // Invitations the app was opened with, now and whenever one arrives.
     const takeLinks = () =>
       void api
@@ -267,6 +272,68 @@ function TitleBar() {
   const [menu, setMenu] = useState<{ x: number; y: number; entries: MenuEntry[] } | null>(null);
   const [renaming, setRenaming] = useState<Tab | null>(null);
 
+  // A tab is dragged along the bar to another place; the others make way
+  // as it passes their middle. A group moves as one tab.
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const placeDragged = useRef<(() => void) | null>(null);
+  const dragTab = (e: React.MouseEvent<HTMLElement>, id: string) => {
+    if ((e.target as Element).closest(".tab-close")) return;
+    const element = e.currentTarget;
+    const grab = e.clientX - element.getBoundingClientRect().left;
+    let pointer = e.clientX;
+    // Follows the pointer, wherever the tab's own place now is.
+    const place = () => {
+      const bar = tabsRef.current?.getBoundingClientRect();
+      element.style.transform = "";
+      const box = element.getBoundingClientRect();
+      let left = pointer - grab;
+      if (bar) left = Math.max(bar.left, Math.min(left, bar.right - box.width));
+      element.style.transform = `translateX(${left - box.left}px)`;
+    };
+    startDrag(
+      e,
+      { kind: "tab", data: id },
+      {
+        onStart: () => {
+          setDragging(id);
+          placeDragged.current = place;
+        },
+        onMove: (x) => {
+          pointer = x;
+          place();
+          const box = element.getBoundingClientRect();
+          const middle = box.left + box.width / 2;
+          const others = [...(tabsRef.current?.querySelectorAll<HTMLElement>("[data-tab]") ?? [])].filter(
+            (other) => other !== element,
+          );
+          // The tab goes after the last one whose middle it has passed, or before them all.
+          let after: HTMLElement | null = null;
+          for (const other of others) {
+            const otherBox = other.getBoundingClientRect();
+            if (otherBox.left + otherBox.width / 2 < middle) after = other;
+          }
+          const target = after ?? others[0];
+          if (!target) return;
+          const ui = useUi.getState();
+          const before = [...(tabsRef.current?.querySelectorAll<HTMLElement>("[data-tab]") ?? [])];
+          const here = before.indexOf(element);
+          const there = before.indexOf(target);
+          // Already there: nothing moves.
+          if (after ? there === here - 1 : there === here + 1) return;
+          ui.moveTab(id, target.dataset.tab!, after !== null);
+        },
+        onEnd: () => {
+          placeDragged.current = null;
+          element.style.transform = "";
+          setDragging(null);
+        },
+      },
+    );
+  };
+  // Once the tabs have moved, the dragged one is put back under the pointer.
+  useLayoutEffect(() => placeDragged.current?.(), [tabs]);
+
   // A right click on a tab: what can be done with it, and with the others.
   const tabMenu = (e: React.MouseEvent, tab: Tab) => {
     e.preventDefault();
@@ -308,7 +375,7 @@ function TitleBar() {
 
   return (
     <header className={cx("titlebar", fullscreen && "fullscreen")} data-tauri-drag-region>
-      <div className="tabs" role="tablist">
+      <div className="tabs" role="tablist" ref={tabsRef}>
         <div
           role="tab"
           aria-selected={active === "home"}
@@ -337,10 +404,13 @@ function TitleBar() {
                 key={group.id}
                 role="tab"
                 aria-selected={on}
-                className={cx("tab", on && "active")}
+                className={cx("tab", on && "active", dragging === members[0].id && "dragging")}
                 title={group.title}
+                data-tab={members[0].id}
                 onMouseDown={(e) => {
-                  if (e.button === 0) open();
+                  if (e.button !== 0) return;
+                  open();
+                  dragTab(e, members[0].id);
                 }}
               >
                 <span className={cx("dot", status)} />
@@ -364,10 +434,13 @@ function TitleBar() {
             key={tab.id}
             role="tab"
             aria-selected={active === tab.id}
-            className={cx("tab", active === tab.id && "active")}
+            className={cx("tab", active === tab.id && "active", dragging === tab.id && "dragging")}
             title={tab.title}
+            data-tab={tab.id}
             onMouseDown={(e) => {
-              if (e.button === 0) activate(tab.id);
+              if (e.button !== 0) return;
+              activate(tab.id);
+              dragTab(e, tab.id);
             }}
             onAuxClick={(e) => {
               if (e.button === 1) requestCloseTab(tab.id);
@@ -377,6 +450,7 @@ function TitleBar() {
             <span className={cx("dot", tab.status, tab.checking && "checking", tab.reconnect && "waiting")} />
             <span className="tab-title">{tab.title}</span>
             <ShareMark tabId={tab.id} />
+            <AgentMark tabId={tab.id} />
             <button
               className="tab-close"
               aria-label={t("tab.close")}
@@ -475,6 +549,7 @@ function TitleBar() {
           </button>
           {!isLocalTab(activeTab) && <ForwardsButton tab={activeTab} />}
           {!isLocalTab(activeTab) && <ShareButton tab={activeTab} />}
+          <AgentButton tab={activeTab} />
         </div>
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} entries={menu.entries} onClose={() => setMenu(null)} />}

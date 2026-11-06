@@ -117,6 +117,8 @@ export class TermSession {
   private startupPending = true;
   private disposed = false;
   private connectedAt = 0;
+  /** When the terminal last printed anything: an agent's command is done once it has been quiet. */
+  lastOutputAt = 0;
 
   private input = "";
   private writing = false;
@@ -290,6 +292,7 @@ export class TermSession {
     };
     const output = new Channel<ArrayBuffer>();
     output.onmessage = (buffer) => {
+      this.lastOutputAt = Date.now();
       this.runActivity();
       if (this.pendingRun && this.tab()?.status === "connected") this.runWhenListening(true);
       if (generation !== this.generation || this.disposed) return;

@@ -171,6 +171,11 @@ export interface Tab {
   files: boolean;
   /** The remote directory last shown in the file manager. */
   filesDir: string | null;
+  /**
+   * Files from this computer dropped on the terminal, for the file manager
+   * to upload as it opens: into `dir`, the terminal's folder, if known.
+   */
+  filesDrop?: { paths: string[]; dir: string | null } | null;
   /** The remote file open in the editor. */
   editor: { path: string; name: string } | null;
   editorDirty: boolean;
@@ -314,6 +319,11 @@ interface UiStore {
   addTab: (tab: Tab) => void;
   patchTab: (id: string, patch: Partial<Tab>) => void;
   removeTab: (id: string) => void;
+  /**
+   * Moves a tab, with the rest of its group if it has one, to where another
+   * stands: before it, or after it.
+   */
+  moveTab: (id: string, to: string, after: boolean) => void;
   setHostPanel: (panel: HostPanel) => void;
   setHostDraft: (draft: HostDraft) => void;
   toast: (kind: Toast["kind"], text: string, detail?: string) => void;
@@ -381,6 +391,21 @@ export const useUi = create<UiStore>((set, get) => ({
           ? s.active
           : (sibling?.id ?? (tabs[index] ?? tabs[index - 1])?.id ?? (s.newTab ? "new" : "home"));
       return { tabs, active };
+    }),
+  moveTab: (id, to, after) =>
+    set((s) => {
+      // A group moves as one, as it is one tab; its terminals keep their order.
+      const unitOf = (tab: Tab) => tab.group?.id ?? tab.id;
+      const byId = (key: string) => s.tabs.find((tab) => tab.id === key);
+      const moving = byId(id);
+      const onto = byId(to);
+      if (!moving || !onto || unitOf(moving) === unitOf(onto)) return s;
+      const units: string[] = [];
+      for (const tab of s.tabs) if (!units.includes(unitOf(tab))) units.push(unitOf(tab));
+      const rest = units.filter((unit) => unit !== unitOf(moving));
+      rest.splice(rest.indexOf(unitOf(onto)) + (after ? 1 : 0), 0, unitOf(moving));
+      const tabs = rest.flatMap((unit) => s.tabs.filter((tab) => unitOf(tab) === unit));
+      return { tabs };
     }),
   // Closing the panel, or turning it to another host, drops the draft.
   setHostPanel: (hostPanel) =>

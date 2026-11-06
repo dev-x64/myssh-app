@@ -62,43 +62,62 @@ pub async fn resolve_dir(path: &str) -> Result<String> {
     Ok(text(&absolute))
 }
 
+/// What the file manager shows of one item, or nothing if it is gone or unreadable.
+async fn entry_at(path: &Path) -> Option<Entry> {
+    let meta = tokio::fs::symlink_metadata(path).await.ok()?;
+    let mut target = None;
+    let (kind, is_dir) = if meta.file_type().is_symlink() {
+        let target_is_dir = tokio::fs::metadata(path)
+            .await
+            .map(|target| target.is_dir())
+            .unwrap_or(false);
+        target = tokio::fs::read_link(path).await.ok().map(|to| text(&to));
+        (EntryKind::Symlink, target_is_dir)
+    } else if meta.is_dir() {
+        (EntryKind::Dir, true)
+    } else if meta.is_file() {
+        (EntryKind::File, false)
+    } else {
+        (EntryKind::Other, false)
+    };
+    Some(Entry {
+        name: path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| text(path)),
+        path: text(path),
+        kind,
+        is_dir,
+        size: meta.len(),
+        modified: modified_seconds(&meta),
+        permissions: permissions(&meta),
+        target,
+    })
+}
+
 pub async fn list(dir: &str) -> Result<Vec<Entry>> {
     let mut reader = tokio::fs::read_dir(dir).await.map_err(map_io)?;
     let mut entries = Vec::new();
     while let Some(item) = reader.next_entry().await.map_err(map_io)? {
-        let path = item.path();
         // An entry can vanish or be unreadable between listing and
         // inspection; it is simply left out.
-        let Ok(meta) = tokio::fs::symlink_metadata(&path).await else {
-            continue;
-        };
-        let mut target = None;
-        let (kind, is_dir) = if meta.file_type().is_symlink() {
-            let target_is_dir = tokio::fs::metadata(&path)
-                .await
-                .map(|target| target.is_dir())
-                .unwrap_or(false);
-            target = tokio::fs::read_link(&path).await.ok().map(|to| text(&to));
-            (EntryKind::Symlink, target_is_dir)
-        } else if meta.is_dir() {
-            (EntryKind::Dir, true)
-        } else if meta.is_file() {
-            (EntryKind::File, false)
-        } else {
-            (EntryKind::Other, false)
-        };
-        entries.push(Entry {
-            name: item.file_name().to_string_lossy().into_owned(),
-            path: text(&path),
-            kind,
-            is_dir,
-            size: meta.len(),
-            modified: modified_seconds(&meta),
-            permissions: permissions(&meta),
-            target,
-        });
+        if let Some(entry) = entry_at(&item.path()).await {
+            entries.push(entry);
+        }
     }
     Ok(entries)
+}
+
+/// The items at these paths, as a listing shows them: files dragged in from
+/// the system. The ones that are gone are left out.
+pub async fn entries(paths: &[String]) -> Vec<Entry> {
+    let mut entries = Vec::new();
+    for path in paths {
+        if let Some(entry) = entry_at(Path::new(path)).await {
+            entries.push(entry);
+        }
+    }
+    entries
 }
 
 pub async fn create_dir(parent: &str, name: &str) -> Result<String> {

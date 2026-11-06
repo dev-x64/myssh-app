@@ -727,6 +727,8 @@ export const api = {
   localHome: () => invoke<string>("local_home"),
   localResolve: (path: string) => invoke<string>("local_resolve", { path }),
   localList: (path: string) => invoke<FileEntry[]>("local_list", { path }),
+  /** Files dragged into the window from the system; the ones gone are left out. */
+  localEntries: (paths: string[]) => invoke<FileEntry[]>("local_entries", { paths }),
   localMkdir: (dir: string, name: string) => invoke<string>("local_mkdir", { dir, name }),
   localRename: (path: string, name: string) => invoke<string>("local_rename", { path, name }),
   localTrash: (paths: string[]) => invoke<void>("local_trash", { paths }),

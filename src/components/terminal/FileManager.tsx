@@ -37,6 +37,7 @@ import {
   type MouseEvent,
 } from "react";
 import { api, asApiError, type ApiError, type FileEntry, type TransferProgress, type TransferSummary } from "../../lib/api";
+import { dropTarget, startDrag, useDrag, type Payload } from "../../lib/drag";
 import { appName, openExternally, stopWatching, useExternal } from "../../lib/external";
 import { errorText, formatDateTime, formatSize, useT } from "../../lib/i18n";
 import { LINUX, MAC, MOBILE, WINDOWS } from "../../lib/platform";
@@ -55,8 +56,21 @@ import { Confirm, ContextMenu, cx, Field, Modal, Segmented, type MenuEntry } fro
 
 /** Matches the editor limit enforced by the core. */
 const EDIT_LIMIT = 2 * 1024 * 1024;
-const DRAG_TYPE = "application/x-myssh-files";
-const COLUMN_DRAG = "application/x-myssh-column";
+/** Rows dragged from one pane to the other: `data` is a `RowDrag`. */
+const ROW_DRAG = "fm-rows";
+/** A column's heading dragged to another place: `data` is a `ColumnDrag`. */
+const COLUMN_DRAG = "fm-column";
+
+interface RowDrag {
+  tabId: string;
+  side: Side;
+}
+
+interface ColumnDrag {
+  tabId: string;
+  side: Side;
+  column: FileColumn;
+}
 /** The name column never gets narrower than this. */
 const NAME_MIN = 110;
 /** Columns are shown only while the name keeps at least this much. */
@@ -515,6 +529,7 @@ function entryIcon(entry: FileEntry) {
 }
 
 function PaneView(props: {
+  tabId: string;
   side: Side;
   title: string;
   pane: Pane;
@@ -524,7 +539,12 @@ function PaneView(props: {
   onActivate: () => void;
   onOpen: (entry: FileEntry) => void;
   onMenu: (e: MouseEvent, entry: FileEntry | null) => void;
-  onDropFrom: (from: Side) => void;
+  /** Rows of the other pane dropped here; `into`: on one of the folders. */
+  onDropFrom: (from: Side, into: string | null) => void;
+  /** Files dragged in from the system; `into`: on one of the folders. */
+  onDropFiles: (paths: string[], into: string | null) => void;
+  /** Whether files from the system can be dropped in this pane. */
+  takesFiles: boolean;
   sort: FileSort;
   onSort: (sort: FileSort) => void;
   extra?: React.ReactNode;
@@ -566,7 +586,23 @@ function PaneView(props: {
     columns.push(column);
   }
   const grid = `20px minmax(${NAME_MIN}px, 1fr) ${columns.map((c) => `${widthOf(c)}px`).join(" ")}`;
-  const [movingOver, setMovingOver] = useState<FileColumn | null>(null);
+  const dragOver = useDrag((s) => s.over);
+  const dragKey = (what: string) => `fm:${props.tabId}:${props.side}:${what}`;
+  const columnDrag = (payload: Payload) => {
+    const data = payload.kind === COLUMN_DRAG ? (payload.data as ColumnDrag) : null;
+    return data && data.tabId === props.tabId && data.side === props.side ? data : null;
+  };
+  /** Rows of the other pane, or files from the system where they can be taken. */
+  const takes = (payload: Payload) => {
+    if (!props.available) return false;
+    if (payload.kind === "files") return props.takesFiles;
+    const data = payload.kind === ROW_DRAG ? (payload.data as RowDrag) : null;
+    return data !== null && data.tabId === props.tabId && data.side !== props.side;
+  };
+  const dropHere = (payload: Payload, into: string | null) => {
+    if (payload.kind === "files") props.onDropFiles(payload.paths ?? [], into);
+    else props.onDropFrom((payload.data as RowDrag).side, into);
+  };
 
   /**
    * Dragging the line between two columns moves it with the pointer: the
@@ -682,8 +718,8 @@ function PaneView(props: {
         );
     }
   };
-  const [dropping, setDropping] = useState(false);
-  const cursorRef = useRef<HTMLDivElement>(null);
+  const dropping = dragOver === dragKey("pane");
+  const cursorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     cursorRef.current?.scrollIntoView({ block: "nearest" });
@@ -715,25 +751,13 @@ function PaneView(props: {
 
   return (
     <section
-      ref={paneRef}
+      ref={(element) => {
+        paneRef.current = element;
+        dropTarget({ key: dragKey("pane"), accepts: takes, drop: (payload) => dropHere(payload, null) })(element);
+      }}
       style={{ "--fm-grid": grid } as React.CSSProperties}
       className={cx("fm-pane", props.active && "active", dropping && "dropping")}
       onMouseDown={props.onActivate}
-      onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "copy";
-        setDropping(true);
-      }}
-      onDragLeave={() => setDropping(false)}
-      onDrop={(e) => {
-        setDropping(false);
-        const from = e.dataTransfer.getData(DRAG_TYPE) as Side;
-        if (from && from !== props.side) {
-          e.preventDefault();
-          props.onDropFrom(from);
-        }
-      }}
     >
       <header className="fm-head">
         <span className="fm-where">
@@ -801,27 +825,19 @@ function PaneView(props: {
         {columns.map((column) => (
           <div
             key={column}
-            className={cx("fm-col-cell", column, movingOver === column && "over")}
-            draggable
-            onDragStart={(e) => {
+            ref={dropTarget({
+              key: dragKey(`column:${column}`),
+              accepts: (payload) => columnDrag(payload) !== null,
+              drop: (payload) => {
+                const moved = columnDrag(payload);
+                if (moved) moveColumn(moved.column, column);
+              },
+            })}
+            className={cx("fm-col-cell", column, dragOver === dragKey(`column:${column}`) && "over")}
+            onMouseDown={(e) => {
               e.stopPropagation();
-              e.dataTransfer.setData(COLUMN_DRAG, column);
-              e.dataTransfer.effectAllowed = "move";
-            }}
-            onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes(COLUMN_DRAG)) return;
-              e.preventDefault();
-              e.stopPropagation();
-              setMovingOver(column);
-            }}
-            onDragLeave={() => setMovingOver(null)}
-            onDrop={(e) => {
-              const moved = e.dataTransfer.getData(COLUMN_DRAG) as FileColumn;
-              setMovingOver(null);
-              if (!moved) return;
-              e.preventDefault();
-              e.stopPropagation();
-              moveColumn(moved, column);
+              const data: ColumnDrag = { tabId: props.tabId, side: props.side, column };
+              startDrag(e, { kind: COLUMN_DRAG, data }, { label: columnLabel[column] });
             }}
           >
             <span className="fm-col-grip" onMouseDown={(e) => resize(column, e)} />
@@ -874,7 +890,17 @@ function PaneView(props: {
             {state.entries.map((entry) => (
             <div
               key={entry.path}
-              ref={state.cursor === entry.path ? cursorRef : undefined}
+              ref={(element) => {
+                if (state.cursor === entry.path) cursorRef.current = element;
+                // A folder takes what is dropped on it: it goes into that folder.
+                if (entry.is_dir) {
+                  dropTarget({
+                    key: dragKey(`row:${entry.path}`),
+                    accepts: takes,
+                    drop: (payload) => dropHere(payload, entry.path),
+                  })(element);
+                }
+              }}
               role="row"
               aria-selected={state.selected.has(entry.path)}
               className={cx(
@@ -882,15 +908,25 @@ function PaneView(props: {
                 entry.is_dir && "dir",
                 state.selected.has(entry.path) && "selected",
                 state.cursor === entry.path && "cursor",
+                dragOver === dragKey(`row:${entry.path}`) && "drop-into",
               )}
-              draggable={!MOBILE}
-              onDragStart={(e) => {
+              onMouseDown={(e) => {
+                if (e.shiftKey || e.metaKey || e.ctrlKey) return;
                 // Dragging a row outside the selection drags just that row.
-                if (!state.selected.has(entry.path)) {
-                  setState((s) => ({ ...s, cursor: entry.path, anchor: entry.path, selected: new Set() }));
-                }
-                e.dataTransfer.setData(DRAG_TYPE, props.side);
-                e.dataTransfer.effectAllowed = "copy";
+                const many = state.selected.has(entry.path) && state.selected.size > 1;
+                const data: RowDrag = { tabId: props.tabId, side: props.side };
+                startDrag(
+                  e,
+                  { kind: ROW_DRAG, data },
+                  {
+                    label: many ? t("files.selected", { n: state.selected.size }) : entry.name,
+                    onStart: () => {
+                      if (!state.selected.has(entry.path)) {
+                        setState((s) => ({ ...s, cursor: entry.path, anchor: entry.path, selected: new Set() }));
+                      }
+                    },
+                  },
+                );
               }}
               // On a phone a tap opens: a folder, or a file in the editor.
               onClick={(e) => (MOBILE ? props.onOpen(entry) : click(e, entry))}
@@ -969,6 +1005,8 @@ export function FileManager({ tab }: { tab: Tab }) {
   // The server: the terminal's directory if wanted and known, else the last
   // directory shown here, else home. After a reconnection: stay put.
   const opened = useRef(false);
+  /** Files dropped on the terminal: the pane opens where they go. */
+  const dropDir = useRef(tab.filesDrop?.dir ?? null);
   const lastRemote = useRef(tab.filesDir);
   lastRemote.current = server.state.dir ?? tab.filesDir;
   const showRemote = server.show;
@@ -977,6 +1015,7 @@ export function FileManager({ tab }: { tab: Tab }) {
     let cancelled = false;
     void (async () => {
       const candidates: (string | null)[] = [];
+      if (!opened.current && dropDir.current) candidates.push(dropDir.current);
       if (!opened.current && useSettings.getState().filesFollowTerminal) {
         candidates.push(await session.workingDirectory());
       }
@@ -997,9 +1036,12 @@ export function FileManager({ tab }: { tab: Tab }) {
     if (!dialog && !menu) root.current?.focus();
   }, [dialog, menu]);
 
+  // Copies finish long after the render that started them: they look at the panes as they are now.
+  const panesNow = useRef(panes);
+  panesNow.current = panes;
   const refresh = (side: Side) => {
-    const dir = panes[side].state.dir;
-    if (dir) void panes[side].show(dir);
+    const pane = panesNow.current[side];
+    if (pane.state.dir) void pane.show(pane.state.dir);
   };
 
   const toTerminalDir = async () => {
@@ -1118,9 +1160,9 @@ export function FileManager({ tab }: { tab: Tab }) {
    * Copies entries from one side to the directory shown on the other. They
    * join the queue: a copy started while another runs waits its turn.
    */
-  const copy = (from: Side, entries: FileEntry[]) => {
+  const copy = (from: Side, entries: FileEntry[], into: string | null = null) => {
     const to = other(from);
-    const destination = panes[to].state.dir;
+    const destination = into ?? panes[to].state.dir;
     if (sid === null || !destination || entries.length === 0) return;
     const upload = from === "local";
     const jobs = entries.map((entry) => ({ id: transferSeq++, sid, entry, upload, destination, to }));
@@ -1142,6 +1184,39 @@ export function FileManager({ tab }: { tab: Tab }) {
       void api.transferCancel(id);
     }
   };
+
+  /**
+   * Files dragged in from the system go to the server: into the folder they
+   * were dropped on, else the one the server's pane shows.
+   */
+  const upload = async (paths: string[], into: string | null) => {
+    const entries = await api.localEntries(paths).catch(() => []);
+    if (entries.length > 0) copy("local", entries, into);
+  };
+
+  /** Files dropped on this computer's pane are already here: the pane goes to where they are. */
+  const showDropped = (paths: string[], into: string | null) => {
+    const first = paths[0];
+    if (into || !first) return;
+    void api.localEntries([first]).then(([entry]) => {
+      if (!entry) return;
+      setActive("local");
+      if (entry.is_dir && entry.kind !== "symlink") void local.show(entry.path);
+      else void local.show(parentOf(entry.path), entry.path);
+    });
+  };
+
+  // Files dropped on the terminal wait for the file manager, which opened
+  // for them in the terminal's folder.
+  const pendingDrop = tab.filesDrop ?? null;
+  useEffect(() => {
+    if (!pendingDrop || sid === null) return;
+    const into = pendingDrop.dir ?? server.state.dir;
+    if (!into) return;
+    patchTab(tab.id, { filesDrop: null });
+    void upload(pendingDrop.paths, into);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingDrop, sid, server.state.dir]);
 
   const edit = (entry: FileEntry) => {
     if (entry.size > EDIT_LIMIT) {
@@ -1414,6 +1489,7 @@ export function FileManager({ tab }: { tab: Tab }) {
       )}
       <div className="fm-panes">
         <PaneView
+          tabId={tab.id}
           side="local"
           title={t("files.this_mac")}
           pane={local}
@@ -1423,11 +1499,14 @@ export function FileManager({ tab }: { tab: Tab }) {
           onActivate={() => setActive("local")}
           onOpen={(entry) => open("local", entry)}
           onMenu={(e, entry) => showMenu("local", e, entry)}
-          onDropFrom={(from) => void copy(from, targetsOf(panes[from].state))}
+          onDropFrom={(from, into) => void copy(from, targetsOf(panes[from].state), into)}
+          onDropFiles={showDropped}
+          takesFiles
           sort={sortLocal}
           onSort={(fileSortLocal) => useSettings.getState().set({ fileSortLocal })}
         />
         <PaneView
+          tabId={tab.id}
           side="remote"
           title={tab.title}
           pane={server}
@@ -1437,7 +1516,9 @@ export function FileManager({ tab }: { tab: Tab }) {
           onActivate={() => setActive("remote")}
           onOpen={(entry) => open("remote", entry)}
           onMenu={(e, entry) => showMenu("remote", e, entry)}
-          onDropFrom={(from) => void copy(from, targetsOf(panes[from].state))}
+          onDropFrom={(from, into) => void copy(from, targetsOf(panes[from].state), into)}
+          onDropFiles={(paths, into) => void upload(paths, into)}
+          takesFiles={sid !== null}
           sort={sortRemote}
           onSort={(fileSortRemote) => useSettings.getState().set({ fileSortRemote })}
           extra={

@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { errorText, useT, type MessageKey } from "../../lib/i18n";
-import { closeTab, getSession } from "../../lib/sessions";
-import { MOBILE } from "../../lib/platform";
+import { closeTab, getSession, type TermSession } from "../../lib/sessions";
+import { dropTarget, useDrag } from "../../lib/drag";
+import { MOBILE, WINDOWS } from "../../lib/platform";
 import { isDark, useSettings } from "../../lib/settings";
 import { useShare } from "../../lib/share";
 import { isLocalTab, useUi, useVault, type Suggestion, type Tab } from "../../lib/store";
@@ -370,6 +371,27 @@ function ClosedBar({ tab }: { tab: Tab }) {
   );
 }
 
+/** A path as a shell takes it in one piece: quoted when it has to be. */
+function quotePath(path: string): string {
+  if ((WINDOWS ? /^[\w@%+=:,./\\-]+$/ : /^[\w@%+=:,./-]+$/).test(path)) return path;
+  return WINDOWS ? `"${path}"` : `'${path.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Files dragged from the system onto a terminal: a server's uploads them
+ * into the folder the shell is in, through the file manager, which opens
+ * there to show them arrive; this computer's types their paths, as the
+ * Mac's own Terminal does.
+ */
+async function dropOnTerminal(tab: Tab, session: TermSession, paths: string[]) {
+  if (isLocalTab(tab)) {
+    session.insert(`${paths.map(quotePath).join(" ")} `);
+    return;
+  }
+  const dir = await session.workingDirectory();
+  useUi.getState().patchTab(tab.id, { files: true, filesDrop: { paths, dir } });
+}
+
 export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
   const t = useT();
   const session = getSession(tab.id);
@@ -424,6 +446,9 @@ export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
     }
   }, [active, session, blocked, tab.status]);
 
+  const dropKey = `term:${tab.id}`;
+  const dropping = useDrag((s) => s.over === dropKey);
+
   if (!session) return null;
   // With guests in the session, the cursor says whose turn at the keyboard it is.
   const typist =
@@ -441,8 +466,21 @@ export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
       <RunDone state={tab.runState ?? null} />
       <ShareBar tab={tab} />
       <div className="term-main">
-        <div className="term-wrap">
+        <div
+          className={cx("term-wrap", dropping && "file-over")}
+          ref={dropTarget({
+            key: dropKey,
+            accepts: (payload) =>
+              payload.kind === "files" && tab.status === "connected" && !tab.files && !tab.editor && !connectScreen,
+            drop: (payload) => void dropOnTerminal(tab, session, payload.paths ?? []),
+          })}
+        >
           <div className="term-host" ref={hostRef} onContextMenu={(e) => e.preventDefault()} />
+          {dropping && (
+            <div className="term-drop">
+              {t(isLocalTab(tab) ? "term.drop.paths" : "term.drop.upload")}
+            </div>
+          )}
           {tab.suggest && active && <SuggestList tab={tab} />}
           {tab.passwordOffer && active && !tab.suggest && <PasswordOffer tab={tab} />}
           {tab.passwordSave && <PasswordSave key={JSON.stringify(tab.passwordSave)} tab={tab} />}

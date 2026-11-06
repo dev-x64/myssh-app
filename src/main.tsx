@@ -24,9 +24,22 @@ if (import.meta.env.DEV) {
     import("./lib/external"),
     import("./lib/share"),
     import("./lib/guest"),
-  ]).then(([store, sessions, settings, api, cloud, external, share, guest]) => {
+    import("./lib/agents"),
+    import("./lib/drag"),
+  ]).then(([store, sessions, settings, api, cloud, external, share, guest, agents, drag]) => {
     Object.assign(window, {
-      __myssh: { ...store, ...sessions, ...settings, ...api, ...cloud, ...external, ...share, ...guest },
+      __myssh: {
+        ...store,
+        ...sessions,
+        ...settings,
+        ...api,
+        ...cloud,
+        ...external,
+        ...share,
+        ...guest,
+        ...agents,
+        ...drag,
+      },
     });
   });
 }

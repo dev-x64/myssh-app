@@ -262,6 +262,16 @@ html[data-platform="linux"] .titlebar {
   color: var(--text);
 }
 
+/* Dragged along the bar: above the others, under the pointer. */
+.tab.dragging {
+  position: relative;
+  z-index: 5;
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  transition: none;
+}
+
 .tab.pinned {
   padding: 0 12px 0 10px;
   flex: none;
@@ -1013,10 +1023,6 @@ button.chip.active {
 
 .crumbs button {
   border: 1px solid transparent;
-}
-
-.card[draggable="true"] {
-  -webkit-user-drag: element;
 }
 
 .card-tags {
@@ -1998,6 +2004,34 @@ button.link {
   display: flex;
 }
 
+/* Files from this computer held over a terminal. */
+.term-wrap.file-over::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-l);
+  background: var(--accent-soft);
+  pointer-events: none;
+}
+
+.term-drop {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  max-width: calc(100% - 48px);
+  padding: 9px 14px;
+  border-radius: var(--radius);
+  background: var(--bg-3);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-weight: 600;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
 .term-host {
   flex: 1;
   min-width: 0;
@@ -2815,6 +2849,12 @@ button.fm-col:hover,
 }
 
 .file-row.selected {
+  background: var(--accent-soft);
+}
+
+/* A folder that takes what is dragged over it. */
+.file-row.drop-into {
+  border-color: var(--accent);
   background: var(--accent-soft);
 }
 
@@ -8558,5 +8598,101 @@ html[data-theme="light"] .welcome-glow i:last-child {
   }
   .fd-new {
     opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------- dragging --- */
+
+html.dragging,
+html.dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+/* What is dragged, named by the pointer. */
+.drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  max-width: 260px;
+  padding: 4px 9px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bg-3);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------- agents --- */
+
+.agents-panel {
+  width: 420px;
+}
+
+.agents-clients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agents-clients .chip {
+  gap: 5px;
+  background: var(--bg-2);
+  color: var(--text);
+}
+
+.agents-cmd {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agents-cmd-label {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agents-cmd-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+}
+
+.agents-cmd-line code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 11.5px/1.5 var(--font-mono);
+}
+
+.agents-mark {
+  flex: none;
+  display: grid;
+  color: var(--text-3);
+}
+
+.agents-mark.busy {
+  color: var(--accent);
+  animation: agents-busy 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes agents-busy {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
   }
 }

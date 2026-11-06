@@ -231,6 +231,12 @@ pub async fn local_list(path: String) -> Result<Vec<Entry>> {
     localfs::list(&path).await
 }
 
+/// Files dragged into the window from the system, as the file manager lists them.
+#[tauri::command]
+pub async fn local_entries(paths: Vec<String>) -> Vec<Entry> {
+    localfs::entries(&paths).await
+}
+
 #[tauri::command]
 pub async fn local_mkdir(dir: String, name: String) -> Result<String> {
     localfs::create_dir(&dir, &name).await

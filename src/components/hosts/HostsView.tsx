@@ -13,12 +13,13 @@ import {
   Server,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { mutate } from "../../lib/actions";
 import { api, type Group, type HostView, type Id } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { watchHosts } from "../../lib/hostStats";
 import { openHost } from "../../lib/sessions";
+import { dropTarget as takesDrops, startDrag as beginDrag, useDrag, type Payload } from "../../lib/drag";
 import { MOBILE } from "../../lib/platform";
 import { useSettings } from "../../lib/settings";
 import { compareHosts, hostSubtitle, hostTitle, useUi, useVault } from "../../lib/store";
@@ -34,8 +35,8 @@ import { Tip } from "../Tip";
 import { keyOf } from "../../lib/shortcuts";
 import { OsIcon } from "./OsIcon";
 
-const HOST_DRAG = "application/x-myssh-host";
-const GROUP_DRAG = "application/x-myssh-group";
+const HOST_DRAG = "host";
+const GROUP_DRAG = "group";
 
 type Dialog =
   | { kind: "group"; group: Group | null }
@@ -133,47 +134,36 @@ export function HostsView() {
   }, [showLoad, shownIds]);
 
   /** The group card or breadcrumb a dragged item is over; `"root"` is "All hosts". */
-  const [dropTarget, setDropTarget] = useState<Id | "root" | null>(null);
+  const over = useDrag((s) => s.over);
+  const dropTarget = over?.startsWith("hosts:") ? (over.slice(6) as Id | "root") : null;
 
-  const startDrag = (e: DragEvent, type: typeof HOST_DRAG | typeof GROUP_DRAG, id: Id) => {
-    e.dataTransfer.setData(type, id);
-    e.dataTransfer.effectAllowed = "move";
-  };
+  const startDrag = (e: MouseEvent, type: typeof HOST_DRAG | typeof GROUP_DRAG, id: Id, label: string) =>
+    beginDrag(e, { kind: type, data: id }, { label });
 
   /** Props that make an element accept hosts and groups dropped on it. */
   const dropInto = (target: Id | null) => {
-    const key = target ?? "root";
-    return {
-      onDragOver: (e: DragEvent) => {
-        const types = e.dataTransfer.types;
-        if (!types.includes(HOST_DRAG) && !types.includes(GROUP_DRAG)) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        setDropTarget(key);
-      },
-      onDragLeave: () => setDropTarget((current) => (current === key ? null : current)),
-      onDrop: (e: DragEvent) => {
-        e.preventDefault();
-        setDropTarget(null);
-        const hostId = e.dataTransfer.getData(HOST_DRAG);
-        const movedGroupId = e.dataTransfer.getData(GROUP_DRAG);
-        const where = target
-          ? (snapshot.groups.find((g) => g.id === target)?.name ?? "")
-          : t("hosts.all");
-        if (hostId) {
-          const host = snapshot.hosts.find((h) => h.id === hostId);
-          if (!host || host.group_id === target) return;
-          void mutate(() => api.hostMove(hostId, target), t("hosts.moved", { name: where }));
-        } else if (movedGroupId && movedGroupId !== target) {
-          const moved = snapshot.groups.find((g) => g.id === movedGroupId);
-          if (!moved || moved.parent_id === target) return;
-          void mutate(
-            () => api.groupSave({ id: moved.id, name: moved.name, parent_id: target }),
-            t("hosts.moved", { name: where }),
-          );
-        }
-      },
+    const accepts = (payload: Payload) => {
+      if (payload.kind === HOST_DRAG) {
+        return snapshot.hosts.find((h) => h.id === payload.data)?.group_id !== target;
+      }
+      if (payload.kind !== GROUP_DRAG || payload.data === target) return false;
+      return snapshot.groups.find((g) => g.id === payload.data)?.parent_id !== target;
     };
+    const drop = (payload: Payload) => {
+      const id = payload.data as Id;
+      const where = target ? (snapshot.groups.find((g) => g.id === target)?.name ?? "") : t("hosts.all");
+      if (payload.kind === HOST_DRAG) {
+        void mutate(() => api.hostMove(id, target), t("hosts.moved", { name: where }));
+      } else {
+        const moved = snapshot.groups.find((g) => g.id === id);
+        if (!moved) return;
+        void mutate(
+          () => api.groupSave({ id: moved.id, name: moved.name, parent_id: target }),
+          t("hosts.moved", { name: where }),
+        );
+      }
+    };
+    return { ref: takesDrops({ key: `hosts:${target ?? "root"}`, accepts, drop }) };
   };
 
   const duplicate = (host: HostView) =>
@@ -323,8 +313,7 @@ export function HostsView() {
                   <button
                     key={g.id}
                     className={cx("card", dropTarget === g.id && "dropping", selected === g.id && "selected")}
-                    draggable={!MOBILE}
-                    onDragStart={(e) => startDrag(e, GROUP_DRAG, g.id)}
+                    onMouseDown={(e) => startDrag(e, GROUP_DRAG, g.id, g.name)}
                     // As a folder: one click picks it, two (or Enter) go in. A tap goes in.
                     onClick={(e) => {
                       e.stopPropagation();
@@ -386,8 +375,7 @@ export function HostsView() {
                       if (MOBILE) openHost(host.id);
                       else setSelected(host.id);
                     }}
-                    draggable={!MOBILE}
-                    onDragStart={(e) => startDrag(e, HOST_DRAG, host.id)}
+                    onMouseDown={(e) => startDrag(e, HOST_DRAG, host.id, hostTitle(host))}
                     onDoubleClick={() => openHost(host.id)}
                     onKeyDown={(e) => {
                       if (e.target === e.currentTarget && e.key === "Enter") openHost(host.id);

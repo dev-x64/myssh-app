@@ -1,5 +1,8 @@
 //! Desktop shell: wires the UI to `myssh-core`.
 
+// Phones have no agents to serve: only the bridge is built there.
+#[cfg_attr(mobile, allow(dead_code))]
+mod agents;
 mod cloud;
 mod commands;
 mod files;
@@ -16,6 +19,12 @@ mod update;
 
 use tauri::Manager;
 
+/// `myssh mcp`: the MCP server a coding agent starts, which reaches the
+/// terminals of the running app the user has opened to agents.
+pub fn agent_bridge() {
+    agents::bridge();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -29,6 +38,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_opener::init());
     builder
         .manage(links::Pending::default())
+        .manage(agents::Agents::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             // A phone has no home folder. The phone's side of the file
@@ -50,6 +60,9 @@ pub fn run() {
             let state = state::AppState::open(data_dir);
             cloud::allow_test_server();
             cloud::follow_configured_server(&state);
+            // Agents on this computer, at the terminals the user opens to them.
+            #[cfg(desktop)]
+            agents::start(app.handle(), state.data_dir.clone());
             app.manage(state);
             #[cfg(desktop)]
             {
@@ -85,6 +98,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_status,
+            agents::agent_reply,
+            agents::agent_info,
             update::update_check,
             update::update_install,
             update::update_restart,
@@ -189,6 +204,7 @@ pub fn run() {
             files::local_home,
             files::local_resolve,
             files::local_list,
+            files::local_entries,
             files::local_mkdir,
             files::local_rename,
             files::local_trash,
