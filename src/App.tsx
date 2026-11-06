@@ -269,6 +269,7 @@ function TitleBar() {
   const activeTab = tabs.find((tab) => tab.id === active);
   const groupFocus = useUi((s) => s.groupFocus);
   const fullscreen = useFullscreen();
+  const agents = useSettings((s) => s.agents);
   const [menu, setMenu] = useState<{ x: number; y: number; entries: MenuEntry[] } | null>(null);
   const [renaming, setRenaming] = useState<Tab | null>(null);
 
@@ -549,7 +550,7 @@ function TitleBar() {
           </button>
           {!isLocalTab(activeTab) && <ForwardsButton tab={activeTab} />}
           {!isLocalTab(activeTab) && <ShareButton tab={activeTab} />}
-          <AgentButton tab={activeTab} />
+          {agents && <AgentButton tab={activeTab} />}
         </div>
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} entries={menu.entries} onClose={() => setMenu(null)} />}

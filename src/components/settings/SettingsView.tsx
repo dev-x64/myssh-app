@@ -17,13 +17,14 @@ import { reportError } from "../../lib/actions";
 import { api } from "../../lib/api";
 import { usePlan } from "../../lib/plan";
 import { useUi, useVault } from "../../lib/store";
-import { ANDROID, WINDOWS } from "../../lib/platform";
+import { ANDROID, MOBILE, WINDOWS } from "../../lib/platform";
 import { useUpdate } from "../../lib/update";
 import { resolveTermTheme } from "../../lib/themes";
 import { cx, Segmented, Switch } from "../ui";
 import { DeleteAccount } from "./DeleteAccount";
 import { SecuritySection } from "./SecuritySection";
 import { SharingSection } from "./SharingSection";
+import { AgentsSection } from "./AgentsSection";
 import { MenuEntrySetting } from "../MenuEntry";
 import { TerminalSample } from "./TerminalSample";
 import { ThemeGrid } from "./ThemeGrid";
@@ -316,6 +317,9 @@ export function SettingsView() {
           </div>
 
           <SharingSection />
+
+          {/* Agents run on a computer; a phone has none to let in. */}
+          {!MOBILE && <AgentsSection />}
 
           <SecuritySection />
 

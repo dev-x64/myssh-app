@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { MOBILE } from "./platform";
+import { useSettings } from "./settings";
 import { getSession, type TermSession } from "./sessions";
 import { hostSubtitle, isLocalTab, useUi, useVault, type Tab } from "./store";
 
@@ -78,6 +79,7 @@ const SETTLE_MS = 800;
 const OUTPUT_LIMIT = 40_000;
 
 function tabFor(args: Record<string, unknown>, need: AgentAccess): { tab: Tab; session: TermSession } {
+  if (!useSettings.getState().agents) throw new Refused("The user has turned agents off in MySSH.");
   const id = typeof args.terminal === "string" ? args.terminal : "";
   const tab = useUi.getState().tabs.find((candidate) => candidate.id === id);
   const access = useAgents.getState().access[id];
@@ -249,9 +251,19 @@ export function startAgents() {
       .catch(() => {});
   });
   void listen<string[]>("agent-clients", (event) => useAgents.setState({ clients: event.payload }));
+  // Listening for agents, or not, as Settings say; turned off, no tab stays open to them.
+  const follow = (on: boolean) => {
+    if (!on) useAgents.setState({ access: {}, clients: [] });
+    void invoke("agent_listen", { on }).catch(() => {});
+  };
+  follow(useSettings.getState().agents);
+  // After the window is reloaded: the agents still connected.
   void agentInfo()
     .then((info) => useAgents.setState({ clients: info.clients }))
     .catch(() => {});
+  useSettings.subscribe((now, before) => {
+    if (now.agents !== before.agents) follow(now.agents);
+  });
   // A closed tab's access goes with it.
   useUi.subscribe((ui) => {
     const { access } = useAgents.getState();

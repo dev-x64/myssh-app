@@ -1,14 +1,13 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Bot, Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { agentInfo, agentName, useAgents, type AgentAccess } from "../../lib/agents";
+import { agentName, useAgents, type AgentAccess } from "../../lib/agents";
 import { useT } from "../../lib/i18n";
-import { WINDOWS } from "../../lib/platform";
-import { type Tab } from "../../lib/store";
+import { useUi, type Tab } from "../../lib/store";
 import { cx, Segmented } from "../ui";
 
-/** A command line to paste into a terminal, and a button that copies it. */
-function CommandLine({ label, command }: { label: string; command: string }) {
+/** Text to paste somewhere (a command, a config), and a button that copies it. */
+export function CopyBlock({ label, text }: { label?: string; text: string }) {
   const t = useT();
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -18,43 +17,60 @@ function CommandLine({ label, command }: { label: string; command: string }) {
   }, [copied]);
   return (
     <div className="agents-cmd">
-      <span className="agents-cmd-label">{label}</span>
+      {label && <span className="agents-cmd-label">{label}</span>}
       <div className="agents-cmd-line">
-        <code className="selectable">{command}</code>
+        <code className="selectable">{text}</code>
         <button
-          className={cx("btn ghost icon small", copied && "done")}
-          title={t("agents.copy")}
-          onClick={() => void writeText(command).then(() => setCopied(true)).catch(() => {})}
+          className={cx("btn small", copied && "done")}
+          onClick={() => void writeText(text).then(() => setCopied(true)).catch(() => {})}
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
+          {t(copied ? "agents.copied" : "agents.copy")}
         </button>
       </div>
     </div>
   );
 }
 
+/** The agents connected now, by name. */
+export function AgentClients() {
+  const t = useT();
+  const clients = useAgents((s) => s.clients);
+  if (clients.length === 0) return <p className="dim">{t("agents.none")}</p>;
+  return (
+    <div className="agents-clients">
+      {clients.map((client, index) => (
+        <span key={`${client}-${index}`} className="chip">
+          <Bot size={12} />
+          {agentName(client)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Opens Settings at the agents' section, with its instructions. */
+export function showAgentSettings() {
+  useUi.getState().goHome("settings");
+  // The page is drawn on the next render; the section is then brought into view.
+  window.setTimeout(() => document.getElementById("settings-agents")?.scrollIntoView({ block: "start" }), 60);
+}
+
 /**
  * The button in the title bar that opens the active terminal to coding
- * agents, and its panel: how far they may go, which ones are connected,
- * and how to connect one.
+ * agents, and its panel: how far they may go here, and which ones are
+ * connected. How to connect one is told in Settings.
  */
 export function AgentButton({ tab }: { tab: Tab }) {
   const t = useT();
   const access = useAgents((s) => s.access[tab.id] ?? null);
   const setAccess = useAgents((s) => s.setAccess);
-  const clients = useAgents((s) => s.clients);
+  const connected = useAgents((s) => s.clients.length > 0);
   const [open, setOpen] = useState(false);
-  const [program, setProgram] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    void agentInfo()
-      .then((info) => {
-        setProgram(info.program);
-        useAgents.setState({ clients: info.clients });
-      })
-      .catch(() => {});
     const onDown = (e: MouseEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -67,13 +83,11 @@ export function AgentButton({ tab }: { tab: Tab }) {
     };
   }, [open]);
 
-  const quoted = program ? (/\s/.test(program) || WINDOWS ? `"${program}"` : program) : "";
-
   return (
     <div className="share" ref={root}>
       <button
         className={cx("btn ghost icon small", (open || access) && "on")}
-        title={access ? t(access === "control" ? "agents.on.control" : "agents.on.read") : t("agents.title")}
+        title={access ? t(access === "control" ? "agents.on.control" : "agents.on.read") : t("agents.button")}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
@@ -88,7 +102,6 @@ export function AgentButton({ tab }: { tab: Tab }) {
             <span className="grow">{t("agents.title")}</span>
           </div>
           <div className="share-body">
-            <p>{t("agents.intro")}</p>
             <span className="share-label">{t("agents.access")}</span>
             <Segmented<AgentAccess | "off">
               value={access ?? "off"}
@@ -99,30 +112,20 @@ export function AgentButton({ tab }: { tab: Tab }) {
               ]}
               onChange={(value) => setAccess(tab.id, value === "off" ? null : value)}
             />
+            <p>{t(access === "control" ? "agents.access.control.hint" : access === "read" ? "agents.access.read.hint" : "agents.access.off.hint")}</p>
             {access === "control" && <p className="note warn">{t("agents.warn")}</p>}
 
             <span className="share-label">{t("agents.connected")}</span>
-            {clients.length === 0 ? (
-              <p className="dim">{t("agents.none")}</p>
-            ) : (
-              <div className="agents-clients">
-                {clients.map((client, index) => (
-                  <span key={`${client}-${index}`} className="chip">
-                    <Bot size={12} />
-                    {agentName(client)}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <span className="share-label">{t("agents.how")}</span>
-            <p>{t("agents.how.text")}</p>
-            {program && (
-              <>
-                <CommandLine label="Claude Code" command={`claude mcp add --scope user myssh -- ${quoted} mcp`} />
-                <CommandLine label="Codex" command={`codex mcp add myssh -- ${quoted} mcp`} />
-              </>
-            )}
+            <AgentClients />
+            <button
+              className={cx("btn small", !connected && "primary")}
+              onClick={() => {
+                setOpen(false);
+                showAgentSettings();
+              }}
+            >
+              {t(connected ? "agents.settings" : "agents.how")}
+            </button>
           </div>
         </div>
       )}

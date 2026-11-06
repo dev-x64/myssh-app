@@ -113,6 +113,8 @@ export interface Settings {
   terminalLinks: boolean;
   /** Shared sessions: inviting people into a terminal, and joining by invitation. */
   sharing: boolean;
+  /** Coding agents may be let at terminals; off, the app does not listen for them at all. Never synced. */
+  agents: boolean;
   /** The sign-in screen shown on first launch has been answered. */
   welcomed: boolean;
   /** The setup shown on first launch (look, terminal, account) has been gone through. */
@@ -175,6 +177,7 @@ export const useSettings = create<SettingsStore>()(
       highlightStatus: true,
       terminalLinks: true,
       sharing: false,
+      agents: false,
       welcomed: false,
       setupDone: false,
       menuEntryAsked: false,

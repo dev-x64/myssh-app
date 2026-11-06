@@ -1,7 +1,5 @@
 //! Desktop shell: wires the UI to `myssh-core`.
 
-// Phones have no agents to serve: only the bridge is built there.
-#[cfg_attr(mobile, allow(dead_code))]
 mod agents;
 mod cloud;
 mod commands;
@@ -58,11 +56,10 @@ pub fn run() {
                 std::env::set_var("HOME", home);
             }
             let state = state::AppState::open(data_dir);
+            // Agents are let in once the window says they are turned on.
+            agents::forget(&state.data_dir);
             cloud::allow_test_server();
             cloud::follow_configured_server(&state);
-            // Agents on this computer, at the terminals the user opens to them.
-            #[cfg(desktop)]
-            agents::start(app.handle(), state.data_dir.clone());
             app.manage(state);
             #[cfg(desktop)]
             {
@@ -100,6 +97,7 @@ pub fn run() {
             commands::app_status,
             agents::agent_reply,
             agents::agent_info,
+            agents::agent_listen,
             update::update_check,
             update::update_install,
             update::update_restart,

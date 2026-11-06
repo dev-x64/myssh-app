@@ -479,6 +479,12 @@ export function createHandler(scenario: Scenario) {
     share_open: () => ({ socket: "ws://127.0.0.1:9/preview", link: "https://cloud.myssh.app/s/preview-room", host: "cloud.myssh.app" }),
     share_join: () => ({ socket: "ws://127.0.0.1:9/preview" }),
 
+    // Coding agents: one connected, as if Claude Code were running.
+    agent_listen: () => undefined,
+    agent_info: () => ({ program: "/Applications/MySSH.app/Contents/MacOS/MySSH", clients: ["claude-code"] }),
+    agent_reply: () => undefined,
+    local_entries: () => [],
+
     // The local terminal: the pretend shell, as if on this Mac.
     local_terminal: ({ events, output }) =>
       shell.open(

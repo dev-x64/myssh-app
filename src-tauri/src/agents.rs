@@ -67,6 +67,9 @@ pub struct Agents {
     pending: Mutex<HashMap<u64, oneshot::Sender<Answer>>>,
     next: AtomicU64,
     clients: Mutex<HashMap<u64, String>>,
+    /// Held while the app listens for agents; dropped, it stops listening
+    /// and lets go of every agent connected.
+    running: Mutex<Option<tokio::sync::watch::Sender<()>>>,
 }
 
 impl Agents {
@@ -116,8 +119,16 @@ fn write_private(path: &Path, content: &[u8]) -> std::io::Result<()> {
 
 // ------------------------------------------------------------------ app ---
 
-/// Starts listening for agents, and says where in the data folder.
-pub fn start(app: &AppHandle, data_dir: PathBuf) {
+/// Starts listening for agents, and says where in the data folder. Does
+/// nothing if the app listens already.
+fn start(app: &AppHandle, data_dir: PathBuf) {
+    let agents = app.state::<Agents>();
+    let mut running = agents.running.lock().unwrap();
+    if running.is_some() {
+        return;
+    }
+    let (stop, stopped) = tokio::sync::watch::channel(());
+    *running = Some(stop);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let listener = match tokio::net::TcpListener::bind(("127.0.0.1", 0)).await {
@@ -130,26 +141,69 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) {
         let Ok(address) = listener.local_addr() else { return };
         let token = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
         let endpoint = Endpoint { port: address.port(), token: token.clone() };
+        let path = data_dir.join(ENDPOINT_FILE);
         let written = serde_json::to_vec(&endpoint)
             .map_err(std::io::Error::other)
-            .and_then(|json| write_private(&data_dir.join(ENDPOINT_FILE), &json));
+            .and_then(|json| write_private(&path, &json));
         if let Err(e) = written {
             log::error!("agents: cannot write the endpoint: {e}");
             return;
         }
         let token = Arc::new(token);
+        let mut until = stopped.clone();
         loop {
-            let Ok((stream, peer)) = listener.accept().await else { continue };
+            let accepted = tokio::select! {
+                accepted = listener.accept() => accepted,
+                _ = until.changed() => break,
+            };
+            let Ok((stream, peer)) = accepted else { continue };
             if !peer.ip().is_loopback() {
                 continue;
             }
             let app = app.clone();
             let token = token.clone();
+            let mut until = stopped.clone();
             tauri::async_runtime::spawn(async move {
-                serve(app, stream, &token).await;
+                tokio::select! {
+                    _ = serve(app, stream, &token) => {}
+                    _ = until.changed() => {}
+                }
             });
         }
+        // Turned off: nobody is to find the way in any more.
+        let _ = std::fs::remove_file(&path);
     });
+}
+
+/// What a run before this one said about where it listened: no longer true.
+pub fn forget(data_dir: &Path) {
+    let _ = std::fs::remove_file(data_dir.join(ENDPOINT_FILE));
+}
+
+/// Stops listening, and lets go of the agents connected.
+fn stop(app: &AppHandle) {
+    let agents = app.state::<Agents>();
+    let Some(running) = agents.running.lock().unwrap().take() else { return };
+    drop(running);
+    agents.clients.lock().unwrap().clear();
+    for (id, send) in agents.pending.lock().unwrap().drain() {
+        let _ = send.send(Answer {
+            id,
+            text: "The user has turned agents off in MySSH.".into(),
+            error: true,
+        });
+    }
+    let _ = app.emit(CLIENTS_EVENT, Vec::<String>::new());
+}
+
+/// Agents are let in, or kept out, as the user turns them on or off in Settings.
+#[tauri::command]
+pub fn agent_listen(app: AppHandle, state: tauri::State<'_, crate::state::AppState>, on: bool) {
+    if on {
+        start(&app, state.data_dir.clone());
+    } else {
+        stop(&app);
+    }
 }
 
 /// One agent's connection: its hello, then tool calls, each answered when
@@ -333,14 +387,23 @@ fn tools() -> Value {
 /// again whenever it has gone (the app was closed and opened again).
 struct Link {
     client: Mutex<String>,
-    write: Mutex<Option<std::net::TcpStream>>,
+    /// The connection calls go out on, numbered: the one it was is let go
+    /// of when the app closes it, and the next call makes another.
+    write: Arc<Mutex<Option<(u64, std::net::TcpStream)>>>,
+    connections: AtomicU64,
     waiting: Arc<Mutex<HashMap<u64, mpsc::Sender<Answer>>>>,
     next: AtomicU64,
 }
 
+/// What a call waiting when the app let go of the connection is told.
+const CUT_OFF: &str = "MySSH closed the connection while the call was running: it was quit, \
+    or agents were turned off in its Settings.";
+
 impl Link {
-    fn connect(&self) -> Result<std::net::TcpStream, String> {
-        let not_running = "MySSH is not running. Ask the user to open it.".to_string();
+    fn connect(&self) -> Result<(u64, std::net::TcpStream), String> {
+        let not_running = "MySSH is not running, or agents are turned off in its Settings. Ask the user to open MySSH \
+            and turn on Settings → Agents."
+            .to_string();
         let path = data_dir().ok_or_else(|| not_running.clone())?.join(ENDPOINT_FILE);
         let endpoint: Endpoint = std::fs::read(&path)
             .ok()
@@ -354,7 +417,9 @@ impl Link {
         stream.write_all(&line).map_err(|e| e.to_string())?;
         // Answers come back in their own time, each to the call waiting for it.
         let read = stream.try_clone().map_err(|e| e.to_string())?;
+        let number = self.connections.fetch_add(1, Ordering::Relaxed);
         let waiting = self.waiting.clone();
+        let write = self.write.clone();
         std::thread::spawn(move || {
             for line in BufReader::new(read).lines() {
                 let Ok(line) = line else { break };
@@ -364,16 +429,21 @@ impl Link {
                     }
                 }
             }
-            // The app has gone: whoever still waits is told so.
+            // The app has let go: no call goes out on this connection any
+            // more, and whoever still waits is told so. In this order, so
+            // that a call either finds no connection and makes one, or went
+            // out on this one and is waiting, to be told now.
+            {
+                let mut write = write.lock().unwrap();
+                if write.as_ref().is_some_and(|(current, _)| *current == number) {
+                    *write = None;
+                }
+            }
             for (id, send) in waiting.lock().unwrap().drain() {
-                let _ = send.send(Answer {
-                    id,
-                    text: "MySSH was closed while the call was running.".into(),
-                    error: true,
-                });
+                let _ = send.send(Answer { id, text: CUT_OFF.into(), error: true });
             }
         });
-        Ok(stream)
+        Ok((number, stream))
     }
 
     fn call(&self, tool: &str, arguments: Value) -> Answer {
@@ -388,11 +458,11 @@ impl Link {
         line.push(b'\n');
         let sent = {
             let mut write = self.write.lock().unwrap();
-            let attempt = |write: &mut Option<std::net::TcpStream>| -> Result<(), String> {
+            let attempt = |write: &mut Option<(u64, std::net::TcpStream)>| -> Result<(), String> {
                 if write.is_none() {
                     *write = Some(self.connect()?);
                 }
-                write.as_mut().unwrap().write_all(&line).map_err(|e| e.to_string())
+                write.as_mut().unwrap().1.write_all(&line).map_err(|e| e.to_string())
             };
             // A connection to an app that has since been closed fails once; then a new one is made.
             attempt(&mut write).or_else(|_| {
@@ -406,7 +476,7 @@ impl Link {
         }
         receive
             .recv()
-            .unwrap_or_else(|_| failed("MySSH was closed while the call was running.".into()))
+            .unwrap_or_else(|_| failed(CUT_OFF.into()))
     }
 }
 
@@ -415,7 +485,8 @@ impl Link {
 pub fn bridge() {
     let link = Arc::new(Link {
         client: Mutex::new("agent".into()),
-        write: Mutex::new(None),
+        write: Arc::default(),
+        connections: AtomicU64::new(1),
         waiting: Arc::default(),
         next: AtomicU64::new(1),
     });
