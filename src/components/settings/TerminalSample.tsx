@@ -6,6 +6,7 @@ import { highlightColors } from "../../lib/sessions";
 import { cursorColorOf, fontStack, isDark, useSettings } from "../../lib/settings";
 import { resolveTermTheme } from "../../lib/themes";
 import { StatsLine, type StatsView } from "../terminal/StatsBar";
+import { SuggestKeys } from "../terminal/SuggestKeys";
 
 /** What advanced mode would say about the sample's server. */
 const SAMPLE_STATS: StatsView = {
@@ -136,8 +137,8 @@ export function TerminalSample() {
                 ["docker compose up -d", SquareTerminal],
                 ["docker logs -f web", History],
               ] as const
-            ).map(([command, Icon]) => (
-              <div key={command} className="suggest-item">
+            ).map(([command, Icon], index) => (
+              <div key={command} className={index === 0 ? "suggest-item preview" : "suggest-item"}>
                 <Icon size={13} className="suggest-icon" />
                 <span className="suggest-text">
                   <mark className="suggest-typed">{command.slice(0, TYPED.length)}</mark>
@@ -145,7 +146,7 @@ export function TerminalSample() {
                 </span>
               </div>
             ))}
-            <div className="suggest-hint">{t("suggest.hint")}</div>
+            <SuggestKeys entered={false} />
           </div>
         </div>
       )}

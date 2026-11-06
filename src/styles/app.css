@@ -2245,6 +2245,12 @@ button.link {
   background: var(--accent-soft);
 }
 
+/* The row written in grey on the line, before the list is gone into. */
+.suggest-item.preview {
+  box-shadow: inset 2px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent-base) 6%, transparent);
+}
+
 .suggest-text {
   flex: 0 1 auto;
   min-width: 0;
@@ -8817,5 +8823,35 @@ html.dragging * {
 .suggest-ghost > span {
   flex: none;
   display: inline-block;
+  text-align: center;
+}
+
+/* The list's keys, each named by what it does there. */
+.suggest-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 3px;
+}
+
+.suggest-keys-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.suggest-keys-gap {
+  width: 10px;
+}
+
+.suggest-keys kbd {
+  min-width: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font: 600 10px/15px var(--font-ui);
   text-align: center;
 }

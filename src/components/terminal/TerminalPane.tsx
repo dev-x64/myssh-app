@@ -20,7 +20,7 @@ import { errorText, useT, type MessageKey } from "../../lib/i18n";
 import { closeTab, getSession, type TermSession } from "../../lib/sessions";
 import { dropTarget, useDrag } from "../../lib/drag";
 import { MOBILE, WINDOWS } from "../../lib/platform";
-import { isDark, useSettings } from "../../lib/settings";
+import { fontStack, isDark, useSettings } from "../../lib/settings";
 import { useShare } from "../../lib/share";
 import { isLocalTab, useUi, useVault, type Suggestion, type Tab } from "../../lib/store";
 import { resolveTermTheme } from "../../lib/themes";
@@ -39,6 +39,7 @@ import { TypingDemo } from "./TypingDemo";
 import { keyOf } from "../../lib/shortcuts";
 import { SnippetsPanel } from "./SnippetsPanel";
 import { StatsLine, useServerStats } from "./StatsBar";
+import { SuggestKeys } from "./SuggestKeys";
 
 /** Advanced mode: the server's load under its terminal, read while it is in sight. */
 function LiveStats({ tab, active }: { tab: Tab; active: boolean }) {
@@ -212,7 +213,7 @@ function SuggestGhost({ tab }: { tab: Tab }) {
               height: box.height,
               maxWidth: box.room,
               lineHeight: `${box.height}px`,
-              fontFamily: `"${fontFamily}", monospace`,
+              fontFamily: fontStack(fontFamily),
               fontSize,
               color: foreground,
             }
@@ -298,7 +299,13 @@ function SuggestList({ tab }: { tab: Tab }) {
               <div
                 role="option"
                 aria-selected={index === state.index}
-                className={cx("suggest-item", item.kind, item.danger && "danger", index === state.index && "active")}
+                className={cx(
+                  "suggest-item",
+                  item.kind,
+                  item.danger && "danger",
+                  // Gone into with ↓, the row is chosen; before that it is only the one in grey on the line.
+                  index === state.index && (state.entered ? "active" : "preview"),
+                )}
                 // Each row says what it is by its icon; a tooltip over the list only covers
                 // the rows under it. Only a warning is worth one.
                 title={item.danger ? t("suggest.ai_danger") : undefined}
@@ -346,9 +353,11 @@ function SuggestList({ tab }: { tab: Tab }) {
         </div>
       )}
       {state.items.length > 0 && (
-        <div className="suggest-hint">
-          {state.items.length === 1 && state.items[0].kind === "ask" ? t("suggest.hint_ask") : t("suggest.hint")}
-        </div>
+        state.items.length === 1 && state.items[0].kind === "ask" ? (
+          <div className="suggest-hint">{t("suggest.hint_ask")}</div>
+        ) : (
+          <SuggestKeys entered={!!state.entered} />
+        )
       )}
     </div>
   );

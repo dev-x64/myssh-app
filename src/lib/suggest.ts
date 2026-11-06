@@ -103,8 +103,6 @@ export class Suggester {
    * Nothing is suggested meanwhile, so the arrows stay the shell's.
    */
   private quiet: "history" | "search" | null = null;
-  /** The selected row was chosen with the arrows, not just the first one offered. */
-  private chosen = false;
 
   constructor(private readonly host: SuggestHost) {}
 
@@ -409,7 +407,6 @@ export class Suggester {
   }
 
   private show(items: Suggestion[], index: number, note?: string) {
-    this.chosen = false;
     if (items.length === 0 && !note) {
       this.hide();
       return;
@@ -526,8 +523,10 @@ export class Suggester {
       return;
     }
     this.show(this.withAi([], answer, this.currentInput().trimStart(), -1), 0);
-    // Asked for: Enter puts the AI's command on the line, to be looked at before it runs.
-    this.chosen = true;
+    // Asked for: the list is gone into at once, and Enter puts the AI's
+    // command on the line, to be looked at before it runs.
+    const shown = this.state();
+    if (shown) this.host.patch({ suggest: { ...shown, entered: true } });
   }
 
   /** The last lines the terminal shows above the command line, secrets taken out. */
@@ -661,15 +660,21 @@ export class Suggester {
     const count = state.items.length;
     const selected = state.items[state.index];
     switch (event.key) {
-      // While the list is open the arrows go round it, and never on to the
-      // shell's history; Escape closes it to give them back.
+      // ↑ is the shell's, for its history, until the list is gone into with
+      // ↓. In the list the arrows move along it, and ↑ from its first row
+      // comes back out to the line, never on into the history.
       case "ArrowDown":
-        this.chosen = true;
-        this.host.patch({ suggest: { ...state, index: state.index < 0 ? 0 : (state.index + 1) % count } });
+        if (!state.entered) {
+          this.host.patch({ suggest: { ...state, entered: true, index: Math.max(0, state.index) } });
+        } else {
+          this.host.patch({ suggest: { ...state, index: Math.min(state.index + 1, count - 1) } });
+        }
         return consume();
       case "ArrowUp":
-        this.chosen = true;
-        this.host.patch({ suggest: { ...state, index: state.index <= 0 ? count - 1 : state.index - 1 } });
+        if (!state.entered) return true;
+        this.host.patch({
+          suggest: state.index <= 0 ? { ...state, entered: false, index: 0 } : { ...state, index: state.index - 1 },
+        });
         return consume();
       case "Tab":
         this.accept(state.index < 0 ? 0 : state.index);
@@ -682,7 +687,7 @@ export class Suggester {
       case "Enter":
         // A row chosen with the arrows runs at once; one the AI wrote is put
         // on the line to be looked at first. Otherwise the line runs as typed.
-        if (!selected || !this.chosen || selected.kind === "ask") {
+        if (!selected || !state.entered || selected.kind === "ask") {
           this.hide();
           return true;
         }
@@ -727,7 +732,8 @@ export class Suggester {
       this.hide();
       return;
     }
-    this.host.patch({ suggest: { ...state, items, index, col: state.col + 1 } });
+    // Typing goes on with the line, out of the list.
+    this.host.patch({ suggest: { ...state, items, index, col: state.col + 1, entered: false } });
   }
 
   /** Puts a suggestion on the command line; running it is up to the caller. */

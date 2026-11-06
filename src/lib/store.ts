@@ -247,6 +247,11 @@ export interface SuggestState {
   note?: string;
   /** Selected row; -1 while nothing is selected. */
   index: number;
+  /**
+   * The list has been gone into with ↓: the arrows move in it. Until then
+   * the selected row is only shown in grey on the line, and ↑ is the shell's.
+   */
+  entered?: boolean;
   /** Cursor cell the list is anchored to. */
   col: number;
   row: number;
