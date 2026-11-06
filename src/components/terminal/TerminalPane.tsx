@@ -149,6 +149,85 @@ const SUGGEST_ICONS: Record<Suggestion["kind"], LucideIcon> = {
   ask: WandSparkles,
 };
 
+/**
+ * The selected suggestion written on the line itself, in grey, after the
+ * cursor: what Tab or the right arrow would add. Only while the cursor is
+ * at the end of the line, where the list was made for.
+ */
+function SuggestGhost({ tab }: { tab: Tab }) {
+  const session = getSession(tab.id);
+  const ref = useRef<HTMLDivElement>(null);
+  const state = tab.suggest;
+  const fontFamily = useSettings((s) => s.fontFamily);
+  const fontSize = useSettings((s) => s.fontSize);
+  const foreground = useSettings((s) => resolveTermTheme(s.termTheme, isDark(s.theme)).colors.foreground);
+  const [box, setBox] = useState<{ left: number; top: number; cell: number; height: number; room: number } | null>(null);
+  // The cursor moves with every echo: the text stays where it is only while it is there.
+  const [, moved] = useState(0);
+  useEffect(() => {
+    if (!session) return;
+    const watching = [session.term.onCursorMove(() => moved((n) => n + 1)), session.term.onScroll(() => moved((n) => n + 1))];
+    return () => watching.forEach((watch) => watch.dispose());
+  }, [session]);
+
+  const item = state && state.index >= 0 ? state.items[state.index] : undefined;
+  const buffer = session?.term.buffer.active;
+  const shown =
+    !!session &&
+    !!state &&
+    !!item &&
+    !!buffer &&
+    !item.replace &&
+    item.kind !== "ask" &&
+    item.insert !== "" &&
+    !item.insert.includes("\n") &&
+    buffer.viewportY === buffer.baseY &&
+    buffer.cursorX === state.col &&
+    buffer.cursorY === state.row &&
+    !(buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true, buffer.cursorX) ?? "").trim();
+
+  useLayoutEffect(() => {
+    const wrap = ref.current?.parentElement;
+    const screen = wrap?.querySelector<HTMLElement>(".xterm-screen");
+    if (!shown || !wrap || !screen || !session || !state) return;
+    const origin = wrap.getBoundingClientRect();
+    const area = screen.getBoundingClientRect();
+    const cell = area.width / session.term.cols;
+    const height = area.height / session.term.rows;
+    const left = area.left - origin.left + state.col * cell;
+    setBox({ left, top: area.top - origin.top + state.row * height, cell, height, room: area.right - origin.left - left });
+  }, [shown, session, state]);
+
+  if (!shown || !item) return <div ref={ref} hidden />;
+  return (
+    <div
+      ref={ref}
+      className="suggest-ghost"
+      aria-hidden
+      style={
+        box
+          ? {
+              left: box.left,
+              top: box.top,
+              height: box.height,
+              maxWidth: box.room,
+              lineHeight: `${box.height}px`,
+              fontFamily: `"${fontFamily}", monospace`,
+              fontSize,
+              color: foreground,
+            }
+          : { visibility: "hidden" }
+      }
+    >
+      {[...item.insert].map((char, index) => (
+        <span key={index} style={{ width: box?.cell }}>
+          {char}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** Suggestions for the command being typed, anchored under the cursor. */
 function SuggestList({ tab }: { tab: Tab }) {
   const t = useT();
@@ -481,6 +560,7 @@ export function TerminalPane({ tab, active }: { tab: Tab; active: boolean }) {
               {t(isLocalTab(tab) ? "term.drop.paths" : "term.drop.upload")}
             </div>
           )}
+          {tab.suggest && active && <SuggestGhost tab={tab} />}
           {tab.suggest && active && <SuggestList tab={tab} />}
           {tab.passwordOffer && active && !tab.suggest && <PasswordOffer tab={tab} />}
           {tab.passwordSave && <PasswordSave key={JSON.stringify(tab.passwordSave)} tab={tab} />}

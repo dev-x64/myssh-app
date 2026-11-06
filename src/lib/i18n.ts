@@ -403,7 +403,7 @@ const en = {
   "tip.hosts.title": "Getting around your hosts",
   "tip.hosts.text": "Double-click a host to connect. Right-click it for more: edit, duplicate, pin to the top. Drag a host onto a group to move it there. {newHost} adds a host, {newTab} opens a new tab.",
   "tip.terminal.title": "The terminal helps as you type",
-  "tip.terminal.text": "Start typing and suggestions appear: ↓ to pick, Tab to insert. A request in plain words turns into a command with AI. Up top: the folder opens this server's files ({files}), the next button Snippets ({snippets}), and the cable Port forwarding. {find} searches the output.",
+  "tip.terminal.text": "Start typing and suggestions appear, the first one in grey on the line: Tab or → inserts it, ↑↓ pick another, Enter runs the one picked. A request in plain words turns into a command with AI. Up top: the folder opens this server's files ({files}), the next button Snippets ({snippets}), and the cable Port forwarding. {find} searches the output.",
   "tip.files.title": "Files on both sides",
   "tip.files.text": "This Mac is on the left, the server on the right. Drag files from one side to the other, or press F5. Double-click a file on the server to edit it right here. Esc takes you back to the terminal.",
   "tip.forwards.title": "How to use Port forwarding",
@@ -604,7 +604,7 @@ const en = {
   "suggest.history": "history",
   "suggest.path": "path",
   "suggest.snippet": "snippet",
-  "suggest.hint": "↓ select · Tab or Enter insert · Esc hide",
+  "suggest.hint": "↑↓ choose · Tab or → insert · Enter run · Esc hide",
   "suggest.hint_ask": "Click or ⌘↵ to ask AI · Esc to hide",
   "settings.suggestions": "Suggestions while typing",
   "settings.ai_suggestions": "AI suggestions",
@@ -1653,7 +1653,7 @@ const ru: Record<MessageKey, string> = {
   "tip.hosts.title": "Как работать с хостами",
   "tip.hosts.text": "Двойной клик по хосту — подключиться. Правый клик — остальное: изменить, дублировать, закрепить наверху. Перетащите хост на группу, чтобы переложить его. {newHost} — новый хост, {newTab} — новая вкладка.",
   "tip.terminal.title": "Терминал подсказывает на ходу",
-  "tip.terminal.text": "Начните печатать — появятся подсказки: ↓ выбрать, Tab вставить. Просьба обычными словами превращается в команду с AI. Наверху справа: папка открывает файлы сервера ({files}), соседняя кнопка — Snippets ({snippets}), кабель — Port forwarding. {find} — поиск по выводу.",
+  "tip.terminal.text": "Начните печатать — появятся подсказки, первая серым прямо в строке: Tab или → вставляет её, ↑↓ выбирают другую, Enter выполняет выбранную. Просьба обычными словами превращается в команду с AI. Наверху справа: папка открывает файлы сервера ({files}), соседняя кнопка — Snippets ({snippets}), кабель — Port forwarding. {find} — поиск по выводу.",
   "tip.files.title": "Файлы с двух сторон",
   "tip.files.text": "Слева — этот Mac, справа — сервер. Перетаскивайте файлы из одной панели в другую или жмите F5. Двойной клик по файлу на сервере открывает его в редакторе прямо здесь. Esc — обратно в терминал.",
   "tip.forwards.title": "Как пользоваться Port forwarding",
@@ -1854,7 +1854,7 @@ const ru: Record<MessageKey, string> = {
   "suggest.history": "история",
   "suggest.path": "путь",
   "suggest.snippet": "сниппет",
-  "suggest.hint": "↓ выбрать · Tab или Enter вставить · Esc скрыть",
+  "suggest.hint": "↑↓ выбрать · Tab или → вставить · Enter выполнить · Esc скрыть",
   "suggest.hint_ask": "Щелчок или ⌘↵ — спросить AI · Esc — скрыть",
   "settings.suggestions": "Подсказки при вводе",
   "settings.ai_suggestions": "AI-подсказки",
@@ -2665,7 +2665,7 @@ const ANDROID_TEXT: Record<Locale, Partial<Record<MessageKey, string>>> = {
     "tip.hosts.text":
       "Tap a host to connect. Press and hold it for more: edit, duplicate, pin to the top. Open terminals wait under Sessions.",
     "tip.terminal.text":
-      "Start typing and suggestions appear: ↓ on the bar above the keyboard picks one, Tab inserts it. A request in plain words turns into a command with AI. Ctrl and Alt there apply to the next key you press. Pinch to change the text size.",
+      "Start typing and suggestions appear: the first one in grey on the line; Tab or → on the bar above the keyboard inserts it, ↑↓ pick another. A request in plain words turns into a command with AI. Ctrl and Alt there apply to the next key you press. Pinch to change the text size.",
     "tip.files.text":
       "The server's files, or this phone's: switch above. Tap a folder to open it, a file on the server to edit it right here. Press and hold a file to copy it to the other side, rename or delete it. Back takes you to the terminal.",
     "tip.forwards.text":
@@ -2681,7 +2681,7 @@ const ANDROID_TEXT: Record<Locale, Partial<Record<MessageKey, string>>> = {
     "tip.hosts.text":
       "Нажмите на хост — подключиться. Долгое нажатие — остальное: изменить, дублировать, закрепить наверху. Открытые терминалы ждут в «Сессиях».",
     "tip.terminal.text":
-      "Начните печатать — появятся подсказки: ↓ на панели над клавиатурой выбирает, Tab вставляет. Просьба обычными словами превращается в команду с AI. Ctrl и Alt там действуют на следующую нажатую клавишу. Щипок двумя пальцами меняет размер текста.",
+      "Начните печатать — появятся подсказки: первая серым прямо в строке; Tab или → на панели над клавиатурой вставляет её, ↑↓ выбирают другую. Просьба обычными словами превращается в команду с AI. Ctrl и Alt там действуют на следующую нажатую клавишу. Щипок двумя пальцами меняет размер текста.",
     "tip.files.text":
       "Файлы сервера или этого телефона — переключатель сверху. Нажмите на папку, чтобы открыть её, на файл сервера — чтобы править прямо здесь. Долгое нажатие на файл — скопировать на другую сторону, переименовать, удалить. «Назад» возвращает в терминал.",
     "tip.forwards.text":

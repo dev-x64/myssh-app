@@ -97,6 +97,14 @@ export class Suggester {
   private shell: string | null | undefined;
   /** How many times the list waited for the server's echo of this line. */
   private echoWaits = 0;
+  /**
+   * The shell's own history is being gone through: with the arrows, until
+   * something is typed, or searched with Ctrl+R, until the search ends.
+   * Nothing is suggested meanwhile, so the arrows stay the shell's.
+   */
+  private quiet: "history" | "search" | null = null;
+  /** The selected row was chosen with the arrows, not just the first one offered. */
+  private chosen = false;
 
   constructor(private readonly host: SuggestHost) {}
 
@@ -122,6 +130,30 @@ export class Suggester {
     if (this.start === null) {
       this.start = { row: buffer.baseY + buffer.cursorY, col: buffer.cursorX };
     }
+    // The shell's history: the arrows (and Ctrl+P, Ctrl+N) while no list is
+    // open, or its search. The line is then the shell's to fill.
+    if (/^\x1b[[O][AB]$/.test(data) || data === "\x10" || data === "\x0e") {
+      if (this.quiet !== "search") this.quiet = "history";
+      this.simple = false;
+      this.hide();
+      return;
+    }
+    if (data === "\x12" || data === "\x13") {
+      this.quiet = "search";
+      this.simple = false;
+      this.hide();
+      return;
+    }
+    if (this.quiet === "search") {
+      // Escape or Ctrl+G ends the search, the line found left to edit.
+      if (data === "\x1b" || data === "\x07") this.quiet = null;
+      this.simple = false;
+      return;
+    }
+    // Typing again: suggestions are back, for the line as it now is.
+    // eslint-disable-next-line no-control-regex
+    if (this.quiet === "history" && (data === "\x7f" || !/[\x00-\x1f]/.test(data))) this.quiet = null;
+    this.followGhost(data);
     if (data === "\x15") this.typed = "";
     else if (data === "\x7f") this.typed = [...this.typed].slice(0, -1).join("");
     else if (data === "\x17") this.typed = this.typed.replace(/\S+\s*$/, "");
@@ -207,6 +239,7 @@ export class Suggester {
   }
 
   reset() {
+    this.quiet = null;
     window.clearTimeout(this.timer);
     this.ticket += 1;
     this.aiTicket += 1;
@@ -232,6 +265,10 @@ export class Suggester {
   private async refresh() {
     const mine = ++this.ticket;
     const input = this.currentInput().trimStart();
+    if (this.quiet) {
+      this.hide();
+      return;
+    }
     if (!this.start || input.trim().length < 2 || this.host.liveSessionId === null || this.secret()) {
       this.hide();
       // The echo of a slow server may simply not be here yet: look again a little later.
@@ -337,9 +374,10 @@ export class Suggester {
     // An answer the AI already gave for this very line stays in the list;
     // with nothing else to offer, asking it is offered.
     const answered = this.aiAnswers.get(input.trim());
-    if (answered) this.show(this.withAi(local, answered, input, -1), -1);
+    // The first row is selected at once, and shows on the line itself.
+    if (answered) this.show(this.withAi(local, answered, input, -1), 0);
     else if (local.length === 0 && this.aiOffered(this.currentInput())) this.show([this.askItem(input)], -1);
-    else this.show(local, -1);
+    else this.show(local, 0);
   }
 
   /**
@@ -371,6 +409,7 @@ export class Suggester {
   }
 
   private show(items: Suggestion[], index: number, note?: string) {
+    this.chosen = false;
     if (items.length === 0 && !note) {
       this.hide();
       return;
@@ -487,6 +526,8 @@ export class Suggester {
       return;
     }
     this.show(this.withAi([], answer, this.currentInput().trimStart(), -1), 0);
+    // Asked for: Enter puts the AI's command on the line, to be looked at before it runs.
+    this.chosen = true;
   }
 
   /** The last lines the terminal shows above the command line, secrets taken out. */
@@ -617,23 +658,39 @@ export class Suggester {
       event.preventDefault();
       return false;
     };
+    const count = state.items.length;
+    const selected = state.items[state.index];
     switch (event.key) {
+      // While the list is open the arrows go round it, and never on to the
+      // shell's history; Escape closes it to give them back.
       case "ArrowDown":
-        this.host.patch({
-          suggest: { ...state, index: Math.min(state.index + 1, state.items.length - 1) },
-        });
+        this.chosen = true;
+        this.host.patch({ suggest: { ...state, index: state.index < 0 ? 0 : (state.index + 1) % count } });
         return consume();
       case "ArrowUp":
-        if (state.index < 0) return true;
-        this.host.patch({ suggest: { ...state, index: state.index - 1 } });
+        this.chosen = true;
+        this.host.patch({ suggest: { ...state, index: state.index <= 0 ? count - 1 : state.index - 1 } });
         return consume();
       case "Tab":
+        this.accept(state.index < 0 ? 0 : state.index);
+        return consume();
+      case "ArrowRight":
+        // Takes what is written in grey on the line; elsewhere on the line it moves the cursor.
+        if (!selected || !this.atLineEnd()) return true;
+        this.accept(state.index);
+        return consume();
       case "Enter":
-        if (state.index < 0) {
-          if (event.key === "Enter") this.hide();
+        // A row chosen with the arrows runs at once; one the AI wrote is put
+        // on the line to be looked at first. Otherwise the line runs as typed.
+        if (!selected || !this.chosen || selected.kind === "ask") {
+          this.hide();
           return true;
         }
         this.accept(state.index);
+        if (selected.kind !== "ai") {
+          this.commit();
+          this.host.type("\r");
+        }
         return consume();
       case "Escape":
         // Dismissed: an answer still on its way does not bring it back.
@@ -645,7 +702,35 @@ export class Suggester {
     }
   }
 
-  /** Puts a suggestion on the command line. It is never run by this. */
+  /** Nothing on the line after the cursor: what is typed goes on its end. */
+  private atLineEnd(): boolean {
+    const buffer = this.host.term.buffer.active;
+    const line = buffer.getLine(buffer.baseY + buffer.cursorY);
+    return !(line?.translateToString(true, buffer.cursorX) ?? "").trim();
+  }
+
+  /**
+   * A letter typed as the grey text goes on: the list keeps up at once,
+   * before the server echoes it and the list is looked up again.
+   */
+  private followGhost(data: string) {
+    const state = this.state();
+    const selected = state?.items[state.index];
+    // eslint-disable-next-line no-control-regex
+    if (!state || !selected || [...data].length !== 1 || /[\x00-\x1f\x7f]/.test(data)) return;
+    if (selected.replace || !selected.insert.startsWith(data) || state.col + 1 >= this.host.term.cols) return;
+    const items = state.items
+      .filter((item) => !item.replace && item.kind !== "ask" && item.insert.startsWith(data) && item.insert !== data)
+      .map((item) => ({ ...item, insert: item.insert.slice(data.length), match: (item.match ?? 0) + data.length }));
+    const index = items.findIndex((item) => item.label === selected.label && item.kind === selected.kind);
+    if (index < 0) {
+      this.hide();
+      return;
+    }
+    this.host.patch({ suggest: { ...state, items, index, col: state.col + 1 } });
+  }
+
+  /** Puts a suggestion on the command line; running it is up to the caller. */
   accept(index: number) {
     const item = this.state()?.items[index];
     if (!item) return;

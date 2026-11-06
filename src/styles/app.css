@@ -8802,3 +8802,20 @@ html.dragging * {
   margin: 2px 0 0;
   font-size: 12px;
 }
+
+/* The selected suggestion, in grey on the line after the cursor. */
+.suggest-ghost {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  overflow: hidden;
+  white-space: pre;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.suggest-ghost > span {
+  flex: none;
+  display: inline-block;
+  text-align: center;
+}
