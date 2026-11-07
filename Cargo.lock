@@ -3058,7 +3058,7 @@ dependencies = [
 
 [[package]]
 name = "myssh"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "log",
  "myssh-core",
@@ -3079,7 +3079,7 @@ dependencies = [
 
 [[package]]
 name = "myssh-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "argon2 0.5.3",
  "base64 0.22.1",
