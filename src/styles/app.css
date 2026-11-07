@@ -8686,6 +8686,11 @@ html.dragging * {
   color: var(--text);
 }
 
+.agents-times {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
 .agents-cmd {
   display: flex;
   flex-direction: column;

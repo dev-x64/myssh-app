@@ -32,17 +32,26 @@ export function CopyBlock({ label, text }: { label?: string; text: string }) {
   );
 }
 
-/** The agents connected now, by name. */
+/**
+ * The agents connected now, by name. An agent connects once for each of
+ * its chats or sessions; those of one agent are shown together, counted.
+ */
 export function AgentClients() {
   const t = useT();
   const clients = useAgents((s) => s.clients);
   if (clients.length === 0) return <p className="dim">{t("agents.none")}</p>;
+  const counted = new Map<string, number>();
+  for (const client of clients) {
+    const name = agentName(client);
+    counted.set(name, (counted.get(name) ?? 0) + 1);
+  }
   return (
     <div className="agents-clients">
-      {clients.map((client, index) => (
-        <span key={`${client}-${index}`} className="chip">
+      {[...counted].map(([name, n]) => (
+        <span key={name} className="chip" title={t("agents.sessions", { n })}>
           <Bot size={12} />
-          {agentName(client)}
+          {name}
+          {n > 1 && <span className="agents-times">×{n}</span>}
         </span>
       ))}
     </div>

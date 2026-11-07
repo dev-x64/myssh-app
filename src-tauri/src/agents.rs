@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
@@ -383,7 +383,11 @@ fn tools() -> Value {
     ])
 }
 
-/// The connection to the running app, made when a tool is first called and
+/// How often a bridge with no connection looks for the app: a file read
+/// and a refused connection on this computer, nothing more.
+const RECONNECT_EVERY: Duration = Duration::from_secs(3);
+
+/// The connection to the running app, made when the agent says hello and
 /// again whenever it has gone (the app was closed and opened again).
 struct Link {
     client: Mutex<String>,
@@ -391,6 +395,8 @@ struct Link {
     /// of when the app closes it, and the next call makes another.
     write: Arc<Mutex<Option<(u64, std::net::TcpStream)>>>,
     connections: AtomicU64,
+    /// Whether the thread that keeps the connection up is running.
+    watching: AtomicBool,
     waiting: Arc<Mutex<HashMap<u64, mpsc::Sender<Answer>>>>,
     next: AtomicU64,
 }
@@ -487,6 +493,7 @@ pub fn bridge() {
         client: Mutex::new("agent".into()),
         write: Arc::default(),
         connections: AtomicU64::new(1),
+        watching: AtomicBool::new(false),
         waiting: Arc::default(),
         next: AtomicU64::new(1),
     });
@@ -516,14 +523,22 @@ pub fn bridge() {
                 if let Some(name) = params.pointer("/clientInfo/name").and_then(Value::as_str) {
                     *link.client.lock().unwrap() = name.to_string();
                 }
-                // The app shows the agent as connected from now on, if it is running.
-                let early = link.clone();
-                std::thread::spawn(move || {
-                    let mut write = early.write.lock().unwrap();
-                    if write.is_none() {
-                        *write = early.connect().ok();
-                    }
-                });
+                // The app shows the agent as connected from now on, if it is
+                // running, and again a few seconds after it is started anew
+                // or agents are turned back on: whenever no connection is
+                // held, one is tried. Once only, however often the agent says hello.
+                if !link.watching.swap(true, Ordering::SeqCst) {
+                    let watch = link.clone();
+                    std::thread::spawn(move || loop {
+                        {
+                            let mut write = watch.write.lock().unwrap();
+                            if write.is_none() {
+                                *write = watch.connect().ok();
+                            }
+                        }
+                        std::thread::sleep(RECONNECT_EVERY);
+                    });
+                }
                 let asked = params.get("protocolVersion").and_then(Value::as_str).unwrap_or("");
                 let version = if ["2024-11-05", "2025-03-26", "2025-06-18"].contains(&asked) {
                     asked
