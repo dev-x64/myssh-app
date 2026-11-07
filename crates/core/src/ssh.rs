@@ -305,8 +305,10 @@ const EXEC_OUTPUT_LIMIT: usize = 4 * 1024 * 1024;
 const STATS_PROBE: &str = r#"
 if [ -r /proc/stat ]; then
   # The processor's share busy over one second, from its counters before and after.
+  # Read by the shell itself where it can: fewer programs started on the server.
   read_cpu() {
-    set -- $(sed -n 's/^cpu  *//p' /proc/stat)
+    read -r _ counters < /proc/stat
+    set -- $counters
     idle=$(( $4 + ${5:-0} )); total=0
     for n in "$@"; do total=$(( total + n )); done
   }
@@ -316,8 +318,8 @@ if [ -r /proc/stat ]; then
   [ $(( total - total0 )) -gt 0 ] && echo "cpu=$(( 1000 * (total - total0 - idle + idle0) / (total - total0) ))"
   echo "cores=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)"
   awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} END {if (t) print "mem=" t*1024 " " a*1024}' /proc/meminfo 2>/dev/null
-  echo "uptime=$(cut -d' ' -f1 /proc/uptime 2>/dev/null)"
-  echo "load=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null)"
+  read -r up _ < /proc/uptime && echo "uptime=$up"
+  read -r load _ < /proc/loadavg && echo "load=$load"
 else
   boot=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/^{ *sec = \([0-9]*\).*/\1/p')
   [ -n "$boot" ] && echo "uptime=$(( $(date +%s) - boot ))"
@@ -679,8 +681,146 @@ impl Io {
 /// a server whose key is not trusted yet, or that wants a password or a
 /// passphrase not saved, ends it with an error, and so does a slow one.
 pub async fn probe_stats(params: ConnectParams, known_hosts: Arc<Mutex<KnownHosts>>) -> Result<ServerStats> {
+    let io = quiet_io();
+    let look = async {
+        let (handle, _) = establish(&params, known_hosts, &io).await?;
+        let output = run_script(&handle, STATS_PROBE).await;
+        let _ = handle.disconnect(Disconnect::ByApplication, "", "en").await;
+        Ok::<_, Error>(parse_stats(&output?.stdout_text()))
+    };
+    timeout(Duration::from_secs(20), look).await.map_err(|_| Error::Timeout)?
+}
+
+/// A connection kept for looking at the same server again: opening one
+/// costs a key exchange and a sign-in on both ends, and a line in the
+/// server's log each time, which a look once a minute would add up to.
+struct KeptProbe {
+    /// What it was opened with: a host changed since is connected to anew.
+    fingerprint: u64,
+    handle: Arc<client::Handle<Handler>>,
+    used: std::time::Instant,
+}
+
+/// Quiet looks at servers for advanced mode, over connections kept open
+/// between them. One that is not used for [`StatsProbes::IDLE`] is closed,
+/// so the servers whose tiles are out of sight are let go.
+#[derive(Default)]
+pub struct StatsProbes {
+    kept: Mutex<HashMap<String, KeptProbe>>,
+    /// Whether the task that closes idle connections is running.
+    sweeping: std::sync::atomic::AtomicBool,
+}
+
+impl StatsProbes {
+    /// A little over two looks a minute apart.
+    const IDLE: Duration = Duration::from_secs(150);
+    /// A kept connection that does not answer in this long is given up for a new one.
+    const KEPT_WAIT: Duration = Duration::from_secs(10);
+
+    /// Reads how busy the server is, over the connection kept for `key`
+    /// when it is still up and opened with the same `params`, otherwise
+    /// over a new one, kept then. Nothing is asked of anyone, as with
+    /// [`probe_stats`].
+    pub async fn read(
+        self: &Arc<Self>,
+        key: &str,
+        params: ConnectParams,
+        known_hosts: Arc<Mutex<KnownHosts>>,
+    ) -> Result<ServerStats> {
+        let fingerprint = probe_fingerprint(&params);
+        let kept = {
+            let kept = self.kept.lock().unwrap();
+            kept.get(key)
+                .filter(|probe| probe.fingerprint == fingerprint && !probe.handle.is_closed())
+                .map(|probe| probe.handle.clone())
+        };
+        if let Some(handle) = kept {
+            if let Ok(Ok(output)) = timeout(Self::KEPT_WAIT, run_script(&handle, STATS_PROBE)).await {
+                if let Some(probe) = self.kept.lock().unwrap().get_mut(key) {
+                    probe.used = std::time::Instant::now();
+                }
+                return Ok(parse_stats(&output.stdout_text()));
+            }
+        }
+        // Whatever was kept is of no more use.
+        if let Some(old) = self.kept.lock().unwrap().remove(key) {
+            close_probe(old.handle);
+        }
+
+        let io = quiet_io();
+        let look = async {
+            let (handle, _) = establish(&params, known_hosts, &io).await?;
+            match run_script(&handle, STATS_PROBE).await {
+                Ok(output) => Ok((handle, output)),
+                Err(error) => {
+                    close_probe(Arc::new(handle));
+                    Err(error)
+                }
+            }
+        };
+        let (handle, output) = timeout(Duration::from_secs(20), look).await.map_err(|_| Error::Timeout)??;
+        let probe = KeptProbe { fingerprint, handle: Arc::new(handle), used: std::time::Instant::now() };
+        if let Some(old) = self.kept.lock().unwrap().insert(key.to_string(), probe) {
+            close_probe(old.handle);
+        }
+        self.sweep_later();
+        Ok(parse_stats(&output.stdout_text()))
+    }
+
+    /// Starts the task that closes idle connections, unless it runs; it
+    /// stops by itself once none is kept.
+    fn sweep_later(self: &Arc<Self>) {
+        if self.sweeping.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let probes = Arc::downgrade(self);
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                let Some(probes) = probes.upgrade() else { return };
+                let mut kept = probes.kept.lock().unwrap();
+                kept.retain(|_, probe| {
+                    let keep = probe.used.elapsed() < Self::IDLE && !probe.handle.is_closed();
+                    if !keep {
+                        close_probe(probe.handle.clone());
+                    }
+                    keep
+                });
+                if kept.is_empty() {
+                    probes.sweeping.store(false, Ordering::SeqCst);
+                    return;
+                }
+            }
+        });
+    }
+}
+
+/// What a connection was opened with, to tell whether it still fits the host.
+fn probe_fingerprint(params: &ConnectParams) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    params.host.hash(&mut hasher);
+    params.port.hash(&mut hasher);
+    params.username.hash(&mut hasher);
+    params.password.hash(&mut hasher);
+    if let Some(key) = &params.key {
+        key.private_key.hash(&mut hasher);
+        key.passphrase.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+/// Says goodbye to the server on a connection no longer wanted.
+fn close_probe(handle: Arc<client::Handle<Handler>>) {
+    tokio::spawn(async move {
+        let _ = timeout(Duration::from_secs(3), handle.disconnect(Disconnect::ByApplication, "", "en")).await;
+    });
+}
+
+/// Input and output for a connection nobody watches: nothing is asked.
+fn quiet_io() -> Io {
     let (out, _dropped) = mpsc::unbounded_channel();
-    let io = Io {
+    Io {
         out,
         shared: Arc::new(Shared {
             prompts: Mutex::new(HashMap::new()),
@@ -691,14 +831,7 @@ pub async fn probe_stats(params: ConnectParams, known_hosts: Arc<Mutex<KnownHost
             agent: Mutex::new(None),
         }),
         interactive: false,
-    };
-    let look = async {
-        let (handle, _) = establish(&params, known_hosts, &io).await?;
-        let output = run_script(&handle, STATS_PROBE).await;
-        let _ = handle.disconnect(Disconnect::ByApplication, "", "en").await;
-        Ok::<_, Error>(parse_stats(&output?.stdout_text()))
-    };
-    timeout(Duration::from_secs(20), look).await.map_err(|_| Error::Timeout)?
+    }
 }
 
 /// Starts a session. Must be called from within a Tokio runtime.

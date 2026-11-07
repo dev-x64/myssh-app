@@ -595,7 +595,8 @@ pub async fn session_cwd(state: State<'_, AppState>, id: u64) -> Result<Option<S
 }
 
 /// How busy a host is, for its tile in advanced mode: a quiet look with
-/// what the host has saved, asking nobody anything (see `ssh::probe_stats`).
+/// what the host has saved, asking nobody anything, over a connection kept
+/// for the next look (see `ssh::StatsProbes`).
 #[tauri::command]
 pub async fn host_stats(state: State<'_, AppState>, host_id: Id) -> Result<myssh_core::ssh::ServerStats> {
     let (host, credentials) = state.with_vault(|v| v.resolve_credentials(host_id))?;
@@ -615,7 +616,7 @@ pub async fn host_stats(state: State<'_, AppState>, host_id: Id) -> Result<myssh
         rows: 24,
         agent: Vec::new(),
     };
-    ssh::probe_stats(params, state.known_hosts.clone()).await
+    state.stats_probes.read(&host_id.to_string(), params, state.known_hosts.clone()).await
 }
 
 /// How busy the server is, for advanced mode.

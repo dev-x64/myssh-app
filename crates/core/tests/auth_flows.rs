@@ -40,6 +40,8 @@ enum Mode {
 struct TestServer {
     mode: Mode,
     accepted_key: Option<PublicKey>,
+    /// How many times someone has signed in.
+    sign_ins: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl server::Server for TestServer {
@@ -73,7 +75,10 @@ impl server::Handler for TestServer {
 
     async fn auth_password(&mut self, _user: &str, password: &str) -> Result<Auth, Self::Error> {
         Ok(match self.mode {
-            Mode::Password if password == PASSWORD => Auth::Accept,
+            Mode::Password if password == PASSWORD => {
+                self.sign_ins.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Auth::Accept
+            }
             _ => self.reject(),
         })
     }
@@ -171,6 +176,12 @@ impl server::Handler for TestServer {
 
 /// Starts the server on a loopback port and returns that port.
 async fn serve(mode: Mode, accepted_key: Option<PublicKey>) -> u16 {
+    serve_counting(mode, accepted_key).await.0
+}
+
+/// A server, and how many times someone has signed in to it.
+async fn serve_counting(mode: Mode, accepted_key: Option<PublicKey>) -> (u16, Arc<std::sync::atomic::AtomicUsize>) {
+    let sign_ins = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let config = Arc::new(server::Config {
         methods: methods(mode),
         auth_rejection_time: Duration::ZERO,
@@ -182,11 +193,12 @@ async fn serve(mode: Mode, accepted_key: Option<PublicKey>) -> u16 {
     });
     let socket = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let port = socket.local_addr().unwrap().port();
+    let counted = sign_ins.clone();
     tokio::spawn(async move {
-        let mut server = TestServer { mode, accepted_key };
+        let mut server = TestServer { mode, accepted_key, sign_ins: counted };
         let _ = server.run_on_socket(config, &socket).await;
     });
-    port
+    (port, sign_ins)
 }
 
 struct Client {
@@ -625,4 +637,27 @@ async fn a_quiet_look_gives_up_rather_than_ask() {
     // No password saved: a terminal would ask for one; the look ends instead.
     let looked = timeout(WAIT, ssh::probe_stats(probe_params(port, None), known)).await.unwrap();
     assert_eq!(looked.unwrap_err().code(), "cancelled");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn looks_again_over_the_connection_kept_from_the_last() {
+    let (port, sign_ins) = serve_counting(Mode::Password, None).await;
+    let (_state, known) = trusting(port).await;
+    let before = sign_ins.load(std::sync::atomic::Ordering::SeqCst);
+    let probes = Arc::new(ssh::StatsProbes::default());
+    for _ in 0..3 {
+        let stats = timeout(WAIT, probes.read("h1", probe_params(port, Some(PASSWORD)), known.clone()))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stats.cpu_percent, Some(12.5));
+    }
+    // Three looks, one sign-in.
+    assert_eq!(sign_ins.load(std::sync::atomic::Ordering::SeqCst) - before, 1);
+
+    // A host changed since is connected to anew.
+    let mut changed = probe_params(port, Some(PASSWORD));
+    changed.username = "bob".into();
+    timeout(WAIT, probes.read("h1", changed, known.clone())).await.unwrap().unwrap();
+    assert_eq!(sign_ins.load(std::sync::atomic::Ordering::SeqCst) - before, 2);
 }

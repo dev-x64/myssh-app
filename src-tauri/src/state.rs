@@ -19,6 +19,8 @@ pub struct AppState {
     /// Why the vault could not be opened, if it could not.
     vault_error: Mutex<Option<ErrorInfo>>,
     pub known_hosts: Arc<Mutex<KnownHosts>>,
+    /// Connections kept for the hosts' tiles in advanced mode.
+    pub stats_probes: Arc<myssh_core::ssh::StatsProbes>,
     sessions: Mutex<HashMap<u64, Arc<SessionHandle>>>,
     /// Terminals on this computer, numbered along with the sessions.
     locals: Mutex<HashMap<u64, Arc<crate::local::LocalShell>>>,
@@ -103,6 +105,7 @@ impl AppState {
             vault: Mutex::new(stores.vault),
             vault_error: Mutex::new(stores.error),
             known_hosts: Arc::new(Mutex::new(known_hosts)),
+            stats_probes: Arc::default(),
             sessions: Mutex::new(HashMap::new()),
             locals: Mutex::new(HashMap::new()),
             next_session: AtomicU64::new(1),
