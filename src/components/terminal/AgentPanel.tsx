@@ -65,7 +65,8 @@ export function AgentButton({ tab }: { tab: Tab }) {
   const t = useT();
   const access = useAgents((s) => s.access[tab.id] ?? null);
   const setAccess = useAgents((s) => s.setAccess);
-  const connected = useAgents((s) => s.clients.length > 0);
+  const count = useAgents((s) => s.clients.length);
+  const connected = count > 0;
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -93,6 +94,7 @@ export function AgentButton({ tab }: { tab: Tab }) {
         onClick={() => setOpen(!open)}
       >
         <Bot size={15} />
+        {connected && <span className="share-count">{count}</span>}
       </button>
 
       {open && (
@@ -112,8 +114,24 @@ export function AgentButton({ tab }: { tab: Tab }) {
               ]}
               onChange={(value) => setAccess(tab.id, value === "off" ? null : value)}
             />
-            <p>{t(access === "control" ? "agents.access.control.hint" : access === "read" ? "agents.access.read.hint" : "agents.access.off.hint")}</p>
-            {access === "control" && <p className="note warn">{t("agents.warn")}</p>}
+            {access === null ? (
+              <div className="agents-explain">
+                <p>{t("agents.access.off.hint")}</p>
+                <ul>
+                  <li>
+                    <b>{t("agents.access.read")}</b> — {t("agents.access.off.read")}
+                  </li>
+                  <li>
+                    <b>{t("agents.access.control")}</b> — {t("agents.access.off.control")}
+                  </li>
+                </ul>
+                {!connected && <p>{t("agents.access.off.first")}</p>}
+              </div>
+            ) : (
+              <p className={cx("agents-brief", access === "control" && "warn")}>
+                {t(access === "control" ? "agents.warn" : "agents.access.read.hint")}
+              </p>
+            )}
 
             <span className="share-label">{t("agents.connected")}</span>
             <AgentClients />

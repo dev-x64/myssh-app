@@ -8642,6 +8642,38 @@ html.dragging * {
   width: 420px;
 }
 
+/* While the tab is closed: what each kind of access gives. */
+.agents-explain {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agents-explain ul {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.agents-explain b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Once it is open: one short line. */
+.share-body p.agents-brief {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.share-body p.agents-brief.warn {
+  color: color-mix(in srgb, var(--warn) 75%, var(--text-2));
+}
+
 .agents-clients {
   display: flex;
   flex-wrap: wrap;
