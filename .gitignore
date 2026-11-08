@@ -9,3 +9,6 @@ src-tauri/dmg/background-preview.png
 
 # The words for the next release, passed to scripts/release.sh.
 notes.txt
+
+# Store and checkout assets, kept out of the repository.
+marketing/
