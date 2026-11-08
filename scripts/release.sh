@@ -1368,10 +1368,16 @@ git tag "v$VERSION"
 COMMITTED="yes"
 
 if [ "$GITHUB" = "yes" ]; then
+  # The release hangs on its tag, which must name the release's own commit:
+  # left to GitHub, the tag would be made on whatever main was there before.
+  # The sources live in that same repository, so they go there first.
+  git push -q origin HEAD "refs/tags/v$VERSION" \
+    || fail "не удалось отправить коммит и тег v$VERSION в GitHub; выпуск собран и закоммичен, отправь их сам и выложи файлы из $OUT"
+  PUSHED="yes"
   NOTES=(--notes "")
   [ -z "$NOTES_FILE" ] || NOTES=(--notes-file "$NOTES_FILE")
   gh release create "v$VERSION" "${FILES[@]}" "$OUT/latest.json" \
-    --repo "$REPO" --title "MySSH $VERSION" --latest "${NOTES[@]}"
+    --repo "$REPO" --title "MySSH $VERSION" --latest --verify-tag "${NOTES[@]}"
   echo "release: выложено и на github.com/$REPO — для версий, которые ищут обновления там."
 fi
 
@@ -1457,6 +1463,7 @@ echo "тогда установленные копии предложат обн
 [ -z "$ANDROID_OUT" ] || echo "Для Google Play: загрузить $ANDROID_OUT/MySSH_${VERSION}_android.aab в Play Console."
 panel_items
 PUSH="Отправить в GitHub  ${D}git push и тег v$VERSION${R}"
+[ "${PUSHED:-}" != "yes" ] || PUSH="${G}✓${R} Отправлено в GitHub"
 while :; do
   choose "Что дальше?" 0 "$PANEL" "$FINDER" "$PUSH" "$UPLOAD" "Выйти"
   case "$CHOICE" in
