@@ -4,6 +4,7 @@
 // until the page is reloaded.
 
 import type { Channel } from "@tauri-apps/api/core";
+import { version } from "../../package.json";
 import type {
   ApiError,
   ForwardStatus,
@@ -58,7 +59,7 @@ export function createHandler(scenario: Scenario) {
   const vault: Snapshot = data.snapshot(cloudOf(), scenario.empty);
 
   const status = (): AppStatus => ({
-    version: "0.1.0",
+    version,
     data_dir: "~/Library/Application Support/app.myssh.desktop",
     debug: false,
     vault_error: scenario.vaultError
@@ -68,12 +69,15 @@ export function createHandler(scenario: Scenario) {
     updates: scenario.os !== "android",
   });
 
+  // The update offered is one past the version being previewed.
+  const nextVersion = (v: string) => v.replace(/\d+$/, (n) => String(Number(n) + 1));
+
   const update = (): UpdateInfo | null =>
     scenario.update === "none"
       ? null
       : {
-          version: "0.1.1",
-          current: "0.1.0",
+          version: nextVersion(version),
+          current: version,
           notes: "Faster file transfers.\nThe account menu shows whether you are on Pro.",
           date: new Date().toISOString(),
         };

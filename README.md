@@ -18,7 +18,7 @@ Hosts, terminal, SFTP, port forwarding, snippets and SSH keys in one small app, 
 
 <br>
 
-<img src=".github/assets/banner.png" alt="MySSH — the lightweight Termius alternative" width="820">
+<img src=".github/assets/banner.png" alt="MySSH — the lightweight Termius alternative, under 20 MB on Mac" width="820">
 
 </div>
 
@@ -74,6 +74,11 @@ Manual install: download the AppImage, keep it in a permanent folder, run `chmod
 <p align="center">
   <img src=".github/assets/sftp.png" alt="Two-pane SFTP file manager: this computer and the server side by side" width="820">
   <br><sub><b>SFTP</b> — over the connection already open, in the folder the terminal is in</sub>
+</p>
+
+<p align="center">
+  <img src=".github/assets/forwarding.png" alt="Port forwarding: each forward's route drawn from this Mac through the SSH tunnel to the service" width="820">
+  <br><sub><b>Port forwarding</b> — every forward in one place, its route drawn as it will work</sub>
 </p>
 
 ## Features
