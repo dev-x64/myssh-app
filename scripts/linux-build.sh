@@ -8,9 +8,12 @@
 #
 # The container is amd64; on Apple Silicon Docker runs it through Rosetta
 # (OrbStack, or Docker Desktop with Rosetta turned on). The sources are
-# shared with it as they are; its node_modules, its cargo cache and what it
-# builds stay in volumes of their own, so nothing of the Mac's is touched
-# but dist/, which the front end is built into as on the Mac.
+# shared with it as they are; its node_modules, its cargo cache, the tools
+# an AppImage is made with (linuxdeploy, AppRun, the AppImage runtime) and
+# what it builds stay in volumes of their own, so nothing of the Mac's is
+# touched but dist/, which the front end is built into as on the Mac. The
+# tools come from GitHub's release downloads once and are kept: a build no
+# longer fails when those downloads do.
 #
 # With TAURI_SIGNING_PRIVATE_KEY (and its password) in the environment, the
 # AppImage is signed for updates, as the other systems' archives are.
@@ -34,12 +37,19 @@ docker run --rm --platform linux/amd64 \
   -v "$PWD":/src -w /src \
   -v myssh-linux-node:/src/node_modules \
   -v myssh-linux-cargo:/root/.cargo/registry \
+  -v myssh-linux-tools:/root/.cache/tauri \
   -v myssh-linux-target:/target \
   -v "$(cd "$OUT" && pwd)":/out \
   -e CARGO_TARGET_DIR=/target \
   -e TAURI_SIGNING_PRIVATE_KEY -e TAURI_SIGNING_PRIVATE_KEY_PASSWORD -e MYSSH_UPDATE_PUBKEY \
   "$IMAGE" bash -c '
     set -euo pipefail
+    # The AppImage runtime, which appimagetool would otherwise download on
+    # every build: fetched once, kept with the other tools, handed over.
+    runtime=/root/.cache/tauri/runtime-x86_64
+    [ -s "$runtime" ] || curl -fsSL --retry 5 --retry-all-errors -o "$runtime" \
+      https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
+    export LDAI_RUNTIME_FILE="$runtime"
     npm ci --no-audit --no-fund --loglevel=error
     npx tauri build --bundles appimage "$@"
     find /target/release/bundle/appimage -maxdepth 1 -type f \
