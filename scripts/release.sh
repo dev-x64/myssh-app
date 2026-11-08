@@ -112,12 +112,15 @@
 #                         without the release key: the store updates it.
 #   MYSSH_PANEL_TOKEN     the panel's token for uploading releases
 #                         (default: the contents of ~/.myssh/panel-token)
-#   MYSSH_RELEASE_GITHUB  "yes" also publishes the files as a release in
-#                         the repository named by updates.repo in
-#                         app.config.json (needs the GitHub CLI). Test
-#                         builds made before numbering started over, up to
-#                         the old 0.1.3, look for updates there and nowhere
-#                         else.
+#   MYSSH_RELEASE_GITHUB  "yes" (the default) pushes the release's commit and
+#                         tag to the repository named by updates.repo in
+#                         app.config.json, where the source lives, and
+#                         makes a release on that tag with the files, by the
+#                         GitHub CLI under your own sign-in; "no" leaves
+#                         GitHub alone. The cloud server never writes there.
+#                         Test builds made before numbering started over, up
+#                         to the old 0.1.3, look for updates there and
+#                         nowhere else.
 #   MYSSH_MAC_IDENTITY    the certificate the Mac app is signed with (by
 #                         default the first "Developer ID Application" one
 #                         in the keychain); "no" signs it ad hoc
@@ -382,7 +385,7 @@ CURRENT="$(python3 -c 'import json; print(json.load(open("src-tauri/tauri.conf.j
 PUBKEY="$(python3 -c 'import json; print(json.load(open("app.config.json")).get("updates", {}).get("pubkey", ""))')"
 REPO="$(python3 -c 'import json; print(json.load(open("app.config.json")).get("updates", {}).get("repo", ""))')"
 SERVER="$(python3 -c 'import json; print(json.load(open("app.config.json"))["cloud"]["server"].rstrip("/"))')"
-GITHUB="${MYSSH_RELEASE_GITHUB:-no}"
+GITHUB="${MYSSH_RELEASE_GITHUB:-yes}"
 WINDOWS="${MYSSH_RELEASE_WINDOWS:-yes}"
 DOCKER=""
 ! docker info > /dev/null 2>&1 || DOCKER="yes"
@@ -984,14 +987,14 @@ PY
     echo "  Системы   $SYSTEMS"
     echo "  Заметки   $(notes_preview)"
     echo "  Панель    $([ -n "$PANEL_TOKEN" ] && echo "загрузить туда самому, отправить — тебе" || echo "${D}загрузить вручную: токена нет${R}")"
-    echo "  GitHub    $([ "$GITHUB" = "yes" ] && echo "выложить и туда (github.com/$REPO)" || echo "${D}нет${R}")"
+    echo "  GitHub    $([ "$GITHUB" = "yes" ] && echo "код, тег и выпуск (github.com/$REPO)" || echo "${D}нет${R}")"
     [ -z "$BEFORE" ] || echo "  Займёт    ${D}около $(minutes "$BEFORE"), как в прошлый раз${R}"
     choose "Собрать?" 0 \
       "Собрать  ${D}потом спросит $( [ "$ANDROID" = "yes" ] || { [ "$WINDOWS" = "yes" ] && [ -n "$SIGNED" ]; } && echo "пароли ключей" || echo "пароль ключа")${R}" \
       "Изменить версию" \
       "Изменить системы" \
       "Изменить заметки" \
-      "Выложить и на GitHub: $([ "$GITHUB" = "yes" ] && echo да || echo нет)  ${D}только для старых тестовых сборок${R}" \
+      "Выложить и на GitHub: $([ "$GITHUB" = "yes" ] && echo да || echo нет)  ${D}код, тег и выпуск с файлами${R}" \
       "$([ -n "$PANEL_TOKEN" ] && echo "Заменить токен панели" || echo "Вставить токен панели  ${D}чтобы загрузить самому${R}")" \
       "Отмена"
     case "$CHOICE" in
@@ -1026,7 +1029,10 @@ if [ -z "$MENU" ] && [ -z "$NOTARIZE" ]; then
     echo "release: нотаризация не настроена; один раз: $(notary_setup)"
   fi
 fi
-[ "$GITHUB" != "yes" ] || command -v gh > /dev/null || fail "для выкладки на GitHub нужен GitHub CLI: brew install gh"
+if [ "$GITHUB" = "yes" ]; then
+  command -v gh > /dev/null || fail "для выкладки на GitHub нужен GitHub CLI: brew install gh (или выключи GitHub в меню)"
+  gh auth status --hostname github.com > /dev/null 2>&1 || fail "GitHub CLI не вошёл в аккаунт: gh auth login (или выключи GitHub в меню)"
+fi
 [ -z "$MAC_MISSING" ] || fail "для приложения под Intel-маки сначала: $MAC_MISSING"
 if [ "$ANDROID" = "yes" ]; then
   android_ready || fail "для Android не хватает: ${ANDROID_MISSING[*]} (или собери без него: MYSSH_RELEASE_ANDROID=no)"
@@ -1378,7 +1384,7 @@ if [ "$GITHUB" = "yes" ]; then
   [ -z "$NOTES_FILE" ] || NOTES=(--notes-file "$NOTES_FILE")
   gh release create "v$VERSION" "${FILES[@]}" "$OUT/latest.json" \
     --repo "$REPO" --title "MySSH $VERSION" --latest --verify-tag "${NOTES[@]}"
-  echo "release: выложено и на github.com/$REPO — для версий, которые ищут обновления там."
+  echo "release: на github.com/$REPO — коммит, тег v$VERSION и выпуск с файлами."
 fi
 
 # Tidy up. The bundle's contents are in $OUT by now, and the front end is
