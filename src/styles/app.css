@@ -3333,7 +3333,8 @@ button.fm-col:hover,
 .account {
   position: relative;
   flex: none;
-  margin-left: 6px;
+  /* Apart from the tab's buttons, whose counts stand out past their corner. */
+  margin-left: 12px;
 }
 
 /* Sync state and the account in one pill. */
@@ -3419,11 +3420,17 @@ button.fm-col:hover,
     opacity 0.2s ease;
 }
 
+/* They open only for a pointer that stays a moment, not one passing by;
+   they fold away at once. */
 .account-pill:hover .pill-label,
 .account-pill:focus-visible .pill-label {
   max-width: 220px;
   margin-left: 0;
   opacity: 1;
+  transition:
+    max-width 0.28s ease 0.4s,
+    margin-left 0.28s ease 0.4s,
+    opacity 0.2s ease 0.45s;
 }
 
 .account-pill:not(.off) {
