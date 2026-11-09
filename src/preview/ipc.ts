@@ -485,7 +485,7 @@ export function createHandler(scenario: Scenario) {
 
     // Coding agents: one connected, as if Claude Code were running.
     agent_listen: () => undefined,
-    agent_info: () => ({ program: "/Applications/MySSH.app/Contents/MacOS/MySSH", clients: ["claude-code"] }),
+    agent_info: () => ({ program: "/Applications/MySSH.app/Contents/MacOS/MySSH", clients: [{ name: "claude-code", lastCall: Date.now() }] }),
     agent_reply: () => undefined,
     local_entries: () => [],
 

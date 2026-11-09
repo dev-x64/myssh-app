@@ -15,11 +15,25 @@ import { hostSubtitle, isLocalTab, useUi, useVault, type Tab } from "./store";
 /** `read`: agents see the terminal; `control`: they also type into it. */
 export type AgentAccess = "read" | "control";
 
+/**
+ * An agent connected: one of its chats or sessions, which connects as soon
+ * as it starts, whether it uses MySSH or not.
+ */
+export interface AgentClient {
+  /** The name it gives itself. */
+  name: string;
+  /** When it last called a tool (ms since 1970), if ever. */
+  lastCall: number | null;
+}
+
+/** How long after its last call an agent still counts as at work. */
+export const AGENT_ACTIVE_MS = 10 * 60_000;
+
 interface AgentStore {
   /** The tabs open to agents, and how far. */
   access: Record<string, AgentAccess>;
-  /** The agents connected now, by the names they give themselves. */
-  clients: string[];
+  /** The agents connected now. */
+  clients: AgentClient[];
   /** When an agent last did something at each tab. */
   touched: Record<string, number>;
   setAccess: (tabId: string, access: AgentAccess | null) => void;
@@ -40,7 +54,7 @@ export const useAgents = create<AgentStore>((set) => ({
 
 export interface AgentInfo {
   program: string;
-  clients: string[];
+  clients: AgentClient[];
 }
 
 export const agentInfo = () => invoke<AgentInfo>("agent_info");
@@ -250,7 +264,7 @@ export function startAgents() {
       .then((result) => invoke("agent_reply", { id: call.id, text: result.text, error: result.error ?? false }))
       .catch(() => {});
   });
-  void listen<string[]>("agent-clients", (event) => useAgents.setState({ clients: event.payload }));
+  void listen<AgentClient[]>("agent-clients", (event) => useAgents.setState({ clients: event.payload }));
   // Listening for agents, or not, as Settings say; turned off, no tab stays open to them.
   const follow = (on: boolean) => {
     if (!on) useAgents.setState({ access: {}, clients: [] });

@@ -1,7 +1,7 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Bot, Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { agentName, useAgents, type AgentAccess } from "../../lib/agents";
+import { AGENT_ACTIVE_MS, agentName, useAgents, type AgentAccess } from "../../lib/agents";
 import { useT } from "../../lib/i18n";
 import { useUi, type Tab } from "../../lib/store";
 import { cx, Segmented } from "../ui";
@@ -42,7 +42,7 @@ export function AgentClients() {
   if (clients.length === 0) return <p className="dim">{t("agents.none")}</p>;
   const counted = new Map<string, number>();
   for (const client of clients) {
-    const name = agentName(client);
+    const name = agentName(client.name);
     counted.set(name, (counted.get(name) ?? 0) + 1);
   }
   return (
@@ -56,6 +56,27 @@ export function AgentClients() {
       ))}
     </div>
   );
+}
+
+/**
+ * How many agents are at work: those that called a tool in the last few
+ * minutes. The rest are only connected, a chat left open somewhere.
+ */
+function useActiveAgents(): number {
+  const clients = useAgents((s) => s.clients);
+  const [, tick] = useState(0);
+  const now = Date.now();
+  const ends = clients
+    .map((client) => (client.lastCall ?? 0) + AGENT_ACTIVE_MS)
+    .filter((end) => end > now);
+  // Drawn again when the next of them stops counting.
+  const next = ends.length ? Math.min(...ends) : null;
+  useEffect(() => {
+    if (next === null) return;
+    const timer = window.setTimeout(() => tick((n) => n + 1), next - Date.now() + 50);
+    return () => window.clearTimeout(timer);
+  }, [next]);
+  return ends.length;
 }
 
 /** Opens Settings at the agents' section, with its instructions. */
@@ -74,8 +95,8 @@ export function AgentButton({ tab }: { tab: Tab }) {
   const t = useT();
   const access = useAgents((s) => s.access[tab.id] ?? null);
   const setAccess = useAgents((s) => s.setAccess);
-  const count = useAgents((s) => s.clients.length);
-  const connected = count > 0;
+  const connected = useAgents((s) => s.clients.length > 0);
+  const active = useActiveAgents();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -103,7 +124,7 @@ export function AgentButton({ tab }: { tab: Tab }) {
         onClick={() => setOpen(!open)}
       >
         <Bot size={15} />
-        {connected && <span className="share-count">{count}</span>}
+        {active > 0 && <span className="share-count">{active}</span>}
       </button>
 
       {open && (

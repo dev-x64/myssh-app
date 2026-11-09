@@ -61,23 +61,46 @@ struct Answer {
     error: bool,
 }
 
+/// An agent connected, as the window is told of it.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Client {
+    /// The agent's own name for itself.
+    name: String,
+    /// When it last called a tool, in milliseconds since 1970: an agent
+    /// connects as soon as its session starts, whether it uses MySSH or not.
+    last_call: Option<u64>,
+}
+
 /// The tool calls waiting for the window, and the agents connected.
 #[derive(Default)]
 pub struct Agents {
     pending: Mutex<HashMap<u64, oneshot::Sender<Answer>>>,
     next: AtomicU64,
-    clients: Mutex<HashMap<u64, String>>,
+    clients: Mutex<HashMap<u64, Client>>,
     /// Held while the app listens for agents; dropped, it stops listening
     /// and lets go of every agent connected.
     running: Mutex<Option<tokio::sync::watch::Sender<()>>>,
 }
 
 impl Agents {
-    fn clients(&self) -> Vec<String> {
-        let mut names: Vec<String> = self.clients.lock().unwrap().values().cloned().collect();
-        names.sort();
-        names
+    fn clients(&self) -> Vec<Client> {
+        let mut clients: Vec<Client> = self.clients.lock().unwrap().values().cloned().collect();
+        clients.sort_by(|a, b| a.name.cmp(&b.name));
+        clients
     }
+}
+
+/// Notes that a connection's agent is at work, and tells the window.
+fn touch(app: &AppHandle, connection: u64) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_millis() as u64);
+    let agents = app.state::<Agents>();
+    if let Some(client) = agents.clients.lock().unwrap().get_mut(&connection) {
+        client.last_call = Some(now);
+    }
+    let _ = app.emit(CLIENTS_EVENT, agents.clients());
 }
 
 /// The app's data folder, as the app itself has it.
@@ -193,7 +216,7 @@ fn stop(app: &AppHandle) {
             error: true,
         });
     }
-    let _ = app.emit(CLIENTS_EVENT, Vec::<String>::new());
+    let _ = app.emit(CLIENTS_EVENT, Vec::<Client>::new());
 }
 
 /// Agents are let in, or kept out, as the user turns them on or off in Settings.
@@ -219,7 +242,7 @@ async fn serve(app: AppHandle, stream: tokio::net::TcpStream, token: &str) {
     let agents = app.state::<Agents>();
     let connection = agents.next.fetch_add(1, Ordering::Relaxed);
     let client = hello.client.chars().take(60).collect::<String>();
-    agents.clients.lock().unwrap().insert(connection, client.clone());
+    agents.clients.lock().unwrap().insert(connection, Client { name: client.clone(), last_call: None });
     let _ = app.emit(CLIENTS_EVENT, agents.clients());
 
     let write = Arc::new(tokio::sync::Mutex::new(write));
@@ -228,8 +251,11 @@ async fn serve(app: AppHandle, stream: tokio::net::TcpStream, token: &str) {
         let app = app.clone();
         let write = write.clone();
         let client = client.clone();
+        touch(&app, connection);
         tauri::async_runtime::spawn(async move {
             let answer = carry_out(&app, &client, call).await;
+            // A long command counts as work until it is done.
+            touch(&app, connection);
             let Ok(mut json) = serde_json::to_vec(&answer) else { return };
             json.push(b'\n');
             let _ = write.lock().await.write_all(&json).await;
@@ -285,7 +311,7 @@ pub struct AgentInfo {
     /// The program an agent is to start as its MCP server, with `mcp`.
     program: String,
     /// The agents connected now.
-    clients: Vec<String>,
+    clients: Vec<Client>,
 }
 
 #[tauri::command]
