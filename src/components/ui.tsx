@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Info, X } from "lucide-react";
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -115,25 +116,82 @@ export function Segmented<V extends string>(props: {
   );
 }
 
+/** How many tags are offered at once under the field. */
+const TAG_OFFERS = 6;
+
+/**
+ * The tags already in use that the text typed may be: those that begin
+ * with it first, then those that hold it, then those it is a slip of (its
+ * letters in order, some left out: "spoty" for "spotify").
+ */
+function tagOffers(draft: string, known: string[], chosen: string[]): string[] {
+  const needle = draft.trim().toLowerCase();
+  if (!needle) return [];
+  const taken = new Set(chosen.map((tag) => tag.toLowerCase()));
+  const inOrder = (name: string) => {
+    let at = 0;
+    for (const char of name) if (char === needle[at]) at++;
+    return at === needle.length;
+  };
+  const ranked: { tag: string; rank: number }[] = [];
+  for (const tag of new Set(known)) {
+    const name = tag.toLowerCase();
+    if (taken.has(name) || name === needle) continue;
+    const rank = name.startsWith(needle) ? 0 : name.includes(needle) ? 1 : needle.length >= 3 && inOrder(name) ? 2 : -1;
+    if (rank >= 0) ranked.push({ tag, rank });
+  }
+  return ranked
+    .sort((a, b) => a.rank - b.rank || a.tag.localeCompare(b.tag))
+    .slice(0, TAG_OFFERS)
+    .map(({ tag }) => tag);
+}
+
 export function TagInput(props: {
   tags: string[];
   onChange: (tags: string[]) => void;
   placeholder?: string;
+  /** The tags in use elsewhere, offered as one is typed. */
+  known?: string[];
 }) {
   const [draft, setDraft] = useState("");
+  const [focused, setFocused] = useState(false);
+  /** The offer picked with the arrow keys, if any. */
+  const [picked, setPicked] = useState(-1);
+  /** Escape put the offers away, until the text changes. */
+  const [dismissed, setDismissed] = useState(false);
+  const listId = useId();
 
-  const commit = () => {
-    const tag = draft.trim().replace(/,$/, "").trim();
+  const offers = tagOffers(draft, props.known ?? [], props.tags);
+  const open = focused && !dismissed && offers.length > 0;
+
+  const add = (text: string) => {
     setDraft("");
+    setPicked(-1);
+    const tag = text.trim().replace(/,$/, "").trim();
     if (!tag) return;
     if (props.tags.some((existing) => existing.toLowerCase() === tag.toLowerCase())) return;
-    props.onChange([...props.tags, tag]);
+    // A tag in use already is kept as it is written there.
+    const known = props.known?.find((existing) => existing.toLowerCase() === tag.toLowerCase());
+    props.onChange([...props.tags, known ?? tag]);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
+    if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
-      commit();
+      const n = offers.length;
+      setPicked(e.key === "ArrowDown" ? (picked + 1) % n : picked <= 0 ? n - 1 : picked - 1);
+    } else if (open && e.key === "Tab" && !e.shiftKey) {
+      e.preventDefault();
+      add(offers[Math.max(0, picked)]);
+    } else if (open && e.key === "Escape") {
+      // Only the offers go away, not the panel around the field.
+      e.preventDefault();
+      e.stopPropagation();
+      setDismissed(true);
+      setPicked(-1);
+    } else if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      add(open && picked >= 0 ? offers[picked] : draft);
     } else if (e.key === "Backspace" && !draft && props.tags.length) {
       props.onChange(props.tags.slice(0, -1));
     }
@@ -156,13 +214,47 @@ export function TagInput(props: {
       <input
         value={draft}
         placeholder={props.tags.length ? "" : props.placeholder}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setPicked(-1);
+          setDismissed(false);
+        }}
         onKeyDown={onKeyDown}
-        onBlur={commit}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          add(draft);
+        }}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={open && picked >= 0 ? `${listId}-${picked}` : undefined}
         spellCheck={false}
         autoCapitalize="off"
         autoCorrect="off"
       />
+      {open && (
+        <ul className="tag-offers" id={listId} role="listbox">
+          {offers.map((tag, i) => (
+            <li
+              key={tag}
+              id={`${listId}-${i}`}
+              role="option"
+              aria-selected={i === picked}
+              className={cx(i === picked && "active")}
+              // Taken before the field loses its focus, which would add the text typed instead.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                add(tag);
+              }}
+              onMouseEnter={() => setPicked(i)}
+            >
+              {tag}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

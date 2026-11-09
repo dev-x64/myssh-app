@@ -906,6 +906,7 @@ button.chip.active {
 }
 
 .tag-input {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -920,6 +921,39 @@ button.chip.active {
 .tag-input:focus-within {
   border-color: var(--accent-line);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* The tags already in use that the text typed may be. */
+.tag-offers {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 200px;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-3);
+  box-shadow: var(--shadow);
+  animation: pop 0.1s ease-out;
+}
+
+.tag-offers li {
+  padding: 6px 9px;
+  border-radius: 6px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.tag-offers li.active {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .tag-input input {

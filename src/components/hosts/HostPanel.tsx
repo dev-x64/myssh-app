@@ -491,7 +491,12 @@ export function HostPanel(props: {
         </Field>
 
         <Field label={t("host.tags")} optional>
-          <TagInput tags={tags} onChange={setTags} placeholder={t("host.tags.hint")} />
+          <TagInput
+            tags={tags}
+            onChange={setTags}
+            placeholder={t("host.tags.hint")}
+            known={snapshot.hosts.flatMap((h) => h.tags)}
+          />
         </Field>
 
         {(snapshot.snippets.length > 0 || startupId) && (
